@@ -1,0 +1,13 @@
+{
+  "title": "Real Estate Dashboard",
+  "owner": "Owner",
+  "area": "Area",
+  "landUse": "Land Use",
+    "searchByName": "🔍 Search by drawing name...",
+  "search": "Search",
+  "matchingNames": "Matching names",
+  "noDrawingFound": "No name found for this search",
+  "noName": "No name",
+    "selectDrawingsToDelete": "🚫 Please select drawings to delete"
+
+}
