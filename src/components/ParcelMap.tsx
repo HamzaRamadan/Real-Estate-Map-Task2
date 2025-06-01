@@ -13,7 +13,6 @@ import {
   loadGraphicsFromLocalStorage,
 } from "../pages/localStorageManager";
 import { initializeSketchVM } from "../pages/SketchViewModel";
-import GraphicEditDrawer from "../pages/GraphicEditDrawer";
 import SearchDrawingsPanel from "../pages/SearchDrawingsPanel";
 import { useSnackbar } from "notistack";
 import { notify } from "../pages/notifier";
@@ -523,34 +522,7 @@ export default function ParcelMap({
         </DialogActions>
       </Dialog>
 
-      {selectedGraphic && (
-        <GraphicEditDrawer
-          open={editDrawerOpen}
-          graphic={selectedGraphic}
-          onClose={() => setEditDrawerOpen(false)}
-          onUpdate={(updatedGraphic) => {
-            const sketchLayer = sketchLayerRef.current;
-            if (!sketchLayer) return;
-
-            sketchLayer.remove(selectedGraphic);
-            sketchLayer.add(updatedGraphic);
-
-            setGraphics((prev) => {
-              const updated = prev.map((g) =>
-                g.attributes?.uid === updatedGraphic.attributes?.uid
-                  ? updatedGraphic
-                  : g
-              );
-              saveGraphicsToLocalStorage(updated);
-              return updated;
-            });
-
-            setSelectedGraphic(updatedGraphic);
-            notify(t("updatedSuccessfully"), { variant: "success" });
-          }}
-          t={t}
-        />
-      )}
+      
     </Box>
   );
 }

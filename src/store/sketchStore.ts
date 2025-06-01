@@ -22,7 +22,7 @@ export const useSketchStore = create<SketchState>((set, get) => ({
 
   removeGraphic: (uid) =>
     set((state) => ({
-      graphics: state.graphics.filter((g) => g.uid !== uid),
+graphics: state.graphics.filter((g) => g.attributes?.uid !== uid),
       selectedGraphicIds: state.selectedGraphicIds.filter((id) => id !== uid),
     })),
 
@@ -41,7 +41,7 @@ export const useSketchStore = create<SketchState>((set, get) => ({
   updateAttributes: (uid, newAttrs) =>
     set((state) => ({
       graphics: state.graphics.map((g) => {
-        if (g.uid === uid) {
+        if (g.attributes?.uid === uid) {
           // نحدث attributes فقط، نحتفظ بنفس geometry و symbol
           const updatedAttributes = {
             ...g.attributes,
@@ -51,7 +51,7 @@ export const useSketchStore = create<SketchState>((set, get) => ({
             geometry: g.geometry,
             symbol: g.symbol,
             attributes: updatedAttributes,
-            uid: g.uid, // مهم نحافظ على نفس uid
+            uid: g.attributes?.uid, // مهم نحافظ على نفس uid
           });
         }
         return g;

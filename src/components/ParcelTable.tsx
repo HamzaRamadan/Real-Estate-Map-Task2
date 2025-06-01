@@ -3,6 +3,7 @@ import { TextField, Box, Backdrop, CircularProgress, Typography } from "@mui/mat
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
+import { GridSelectionModel } from "@mui/x-data-grid";
 
 const columns = [
   {
@@ -19,7 +20,7 @@ const columns = [
     filterable: true,
     flex: 1,
     hideable: true,
-    display: { xs: "none", sm: "flex" },
+    // display: { xs: "none", sm: "flex" },
   },
   {
     field: "region",
@@ -185,7 +186,7 @@ export default function ParcelTable({
           checkboxSelection
           selectionModel={selectionModel}
           onRowClick={(params) => onSelectParcel([Number(params.row.objectid)])}
-          onSelectionModelChange={(newSelection) => {
+          onSelectionModelChange={(newSelection: GridSelectionModel) => {
             const ids = newSelection.map(Number);
             setSelectionModel(ids);
             onSelectParcel(ids.length > 0 ? ids : null);
