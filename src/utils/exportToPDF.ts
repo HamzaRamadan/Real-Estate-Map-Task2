@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import "./fonts/Amiri-Regular-normal.js"; // استيراد الخط العربي
+import "./fonts/Amiri-Regular-normal.js"; 
 
 export const exportToPDF = (
   data: any[],
@@ -12,8 +12,7 @@ export const exportToPDF = (
     format: "a4",
   });
 
-  // استخدام الخط العربي
-  doc.setFont("Amiri-Regular"); // الخط اللي ضفناه
+  doc.setFont("Amiri-Regular"); 
   doc.setFontSize(12);
 
   const tableColumnTitles = columns?.map((col) => col.title) || [];

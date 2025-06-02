@@ -12,11 +12,10 @@ export default function ParcelContainer() {
   const { t, i18n } = useTranslation();
   const mapViewRef = useRef<any>(null);
 
-  // ✅ عدّلنا الدالة دي لتأخذ ids كمصفوفة
   const handleSelect = (ids: number[] | null) => {
     console.log("Selected IDs:", ids);
     if (Array.isArray(ids) && ids.length > 0) {
-      setSelectedId(ids[0]); // خد أول واحد فقط
+      setSelectedId(ids[0]); 
     } else {
       setSelectedId(null);
     }
@@ -26,12 +25,46 @@ export default function ParcelContainer() {
     setSelectedId(null);
   };
 
-  const handleExportExcel = () => {
-    if (parcels.length === 0) return;
+  const columns = [
+    { field: "objectid", title: i18n.language === "ar" ? "المعرف" : "ID" },
+    { field: "st_district_ar", title: i18n.language === "ar" ? "الحي (عربي)" : "District (AR)" },
+    { field: "region", title: i18n.language === "ar" ? "المنطقة" : "Region" },
+    { field: "citizen_total", title: i18n.language === "ar" ? "إجمالي السكان" : "Total Population" },
+    { field: "citizen_males", title: i18n.language === "ar" ? "الذكور (مواطنين)" : "Citizen Males" },
+    { field: "citizen_females", title: i18n.language === "ar" ? "الإناث (مواطنات)" : "Citizen Females" },
+  ];
 
-    const worksheet = XLSX.utils.json_to_sheet(parcels);
+  const handleExportExcel = () => {
+    if (parcels.length === 0) {
+      alert(t("noDataToExport") || "لا يوجد بيانات للتصدير!");
+      return;
+    }
+
+    // تحضير البيانات بناءً على الأعمدة المحددة
+    const data = parcels.map((parcel) =>
+      columns.reduce((row: any, col) => {
+        row[col.title] = parcel[col.field] ?? "غير متاح";
+        return row;
+      }, {})
+    );
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    if (i18n.language === "ar") {
+      const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (worksheet[cellAddress]) {
+            worksheet[cellAddress].t = "s"; 
+            worksheet[cellAddress].z = "@"; 
+          }
+        }
+      }
+    }
+
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Parcels");
+    XLSX.utils.book_append_sheet(workbook, worksheet, i18n.language === "ar" ? "بيانات القطع" : "Parcels");
 
     const excelBuffer = XLSX.write(workbook, {
       bookType: "xlsx",
@@ -45,21 +78,20 @@ export default function ParcelContainer() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "parcels.xlsx";
+    link.download = i18n.language === "ar" ? "بيانات_القطع.xlsx" : "parcels.xlsx";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const columns = [
-    { field: "objectid", title: "المعرف" },
-    { field: "st_dist_ara", title: "الحي (عربي)" },
-    { field: "region", title: "المنطقة" },
-  ];
-
   const handleExportPDF = () => {
-    exportToPDF(parcels, "القطع", columns);
+    console.log("Exporting PDF with parcels:", parcels);
+    if (parcels.length === 0) {
+      alert(t("noDataToExport") || "لا يوجد بيانات للتصدير!");
+      return;
+    }
+    exportToPDF(parcels, i18n.language === "ar" ? "بيانات القطع" : "Parcel Data", columns);
   };
 
   const handleExportMapImage = async () => {
@@ -87,6 +119,8 @@ export default function ParcelContainer() {
     i18n.changeLanguage(newLang);
     document.dir = newLang === "ar" ? "rtl" : "ltr";
   };
+
+    // وسع وسع بقى اهم جزئيه دى بتاعه الريسبونسيف Reponsive
 
   const responsiveStyles = {
     container: {
@@ -208,7 +242,7 @@ export default function ParcelContainer() {
         <Box sx={responsiveStyles.tableContainer}>
           <Box sx={{ flex: 1, maxHeight: { sm: "calc(100vh - 80px)" }, overflowY: "auto" }}>
             <ParcelTable
-  selectedIds={selectedId ? [selectedId] : null}
+              selectedIds={selectedId ? [selectedId] : null}
               onSelectParcel={handleSelect}
               onExportDataRequest={setParcels}
             />

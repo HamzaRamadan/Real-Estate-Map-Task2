@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { font } from "../utils/fonts/Amiri-Regular-normal.js";
-import i18n from "../i18n"; // تأكد أنك مستورد i18n
+import i18n from "../i18n"; 
 
 
 export async function exportToPDF(

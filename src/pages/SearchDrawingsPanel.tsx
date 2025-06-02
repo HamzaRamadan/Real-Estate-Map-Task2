@@ -19,7 +19,7 @@ interface Props {
 interface GraphicAttributes {
   uid: string;
   name?: string;
-  [key: string]: any; // للسماح بخصائص ديناميكية إضافية
+  [key: string]: any; 
 }
 export default function SearchDrawingsPanel({
   graphics,
@@ -35,20 +35,20 @@ export default function SearchDrawingsPanel({
   const { t, i18n } = useTranslation();
 
   const [editing, setEditing] = useState(false);
-const [editedValues, setEditedValues] = useState<GraphicAttributes>({ uid: "" });  // حالة مؤشر التحميل
+  const [editedValues, setEditedValues] = useState<GraphicAttributes>({
+    uid: "",
+  }); 
   const [loading, setLoading] = useState(false);
 
-  // حالة اختيار العنصر في التنقل بلوحة المفاتيح
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
 
-  // ** حالة التحكم بظهور رسالة النجاح **
   const [successOpen, setSuccessOpen] = useState(false);
 
   const handleSearch = () => {
     const lower = searchText.trim().toLowerCase();
     if (!lower) return;
 
-    setLoading(true); // بدء التحميل
+    setLoading(true); 
 
     setTimeout(() => {
       const matches = graphics.filter((g) =>
@@ -57,14 +57,14 @@ const [editedValues, setEditedValues] = useState<GraphicAttributes>({ uid: "" })
 
       setSearchResults(matches);
       setSearched(true);
-      setHighlightedIndex(null); // إعادة تعيين مؤشر العنصر المحدد
+      setHighlightedIndex(null); 
 
       if (matches.length === 1) {
         handleSelect(matches[0]);
       }
 
-      setLoading(false); // انتهاء التحميل
-    }, 400); // محاكاة تأخير بسيط (تقدر تحذف الـ setTimeout لو البحث فعلي)
+      setLoading(false); 
+    }, 400); 
   };
 
   const handleSelect = (graphic: Graphic) => {
@@ -83,17 +83,15 @@ const [editedValues, setEditedValues] = useState<GraphicAttributes>({ uid: "" })
 
   const handleZoomToAll = () => {
     if (!view || searchResults.length === 0) return;
-    // إعادة تعيين مظهر كل الرسومات إلى الافتراضي
     graphics.forEach((g) => {
       g.symbol = null;
     });
 
-    // تغيير مظهر الرسومات الناتجة من البحث
     searchResults.forEach((g) => {
       g.symbol = {
         type: "simple-fill",
-        color: [0, 255, 0, 0.4], // أخضر شفاف
-        outline: { color: "#006400", width: 1 }, // أخضر غامق
+        color: [0, 255, 0, 0.4], 
+        outline: { color: "#006400", width: 1 }, 
       };
     });
 
@@ -104,38 +102,46 @@ const [editedValues, setEditedValues] = useState<GraphicAttributes>({ uid: "" })
     }
   };
 
- const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (e.key === "Enter") {
-    if (highlightedIndex !== null && searchResults[highlightedIndex]) {
-      handleSelect(searchResults[highlightedIndex]);
-    } else {
-      handleSearch();
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      if (highlightedIndex !== null && searchResults[highlightedIndex]) {
+        handleSelect(searchResults[highlightedIndex]);
+      } else {
+        handleSearch();
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev: number | null) =>
+        prev === null || prev === searchResults.length - 1 ? 0 : prev + 1
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev: number | null) =>
+        prev === null || prev === 0 ? searchResults.length - 1 : prev - 1
+      );
     }
-  } else if (e.key === "ArrowDown") {
-    e.preventDefault();
-    setHighlightedIndex((prev: number | null) =>
-      prev === null || prev === searchResults.length - 1 ? 0 : prev + 1
-    );
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    setHighlightedIndex((prev: number | null) =>
-      prev === null || prev === 0 ? searchResults.length - 1 : prev - 1
-    );
-  }
-};
+  };
 
-  // دالة إغلاق رسالة النجاح
-const handleSuccessClose = (
-  _event: React.SyntheticEvent | Event,
-  reason: SnackbarCloseReason
-) => {
-  if (reason === "clickaway") return;
-  setSuccessOpen(false);
-};
-// دالة إغلاق الـ Alert
-const handleAlertClose = (_event: React.SyntheticEvent) => {
-  setSuccessOpen(false);
-};
+  const handleSuccessClose = (
+    _event: React.SyntheticEvent | Event,
+    reason: SnackbarCloseReason
+  ) => {
+    if (reason === "clickaway") return;
+    setSuccessOpen(false);
+  };
+  const handleAlertClose = (_event: React.SyntheticEvent) => {
+    setSuccessOpen(false);
+  };
+  const buttonStyleResponsive: React.CSSProperties = {
+    backgroundColor: "#df1616",
+    color: "white",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: 4,
+    cursor: "pointer",
+    height: "40px",
+    fontSize: window.innerWidth < 400 ? "12px" : "14px", 
+  };
 
   return (
     <div style={{ marginBottom: 20, marginTop: 20 }}>
@@ -153,7 +159,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
           label={
             i18n.language === "en"
               ? "🔍 ... Search By Name"
-              : "🔍 ...ابحث باسم الرسمه"
+              : "🔍 ...ابحث ب اسم الرسمه"
           }
           variant="outlined"
           value={searchText}
@@ -172,7 +178,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
             borderRadius: 4,
             cursor: "pointer",
             height: "40px",
-            
+            fontSize: window.innerWidth < 400 ? "12px" : "14px",
           }}
           onClick={handleSearch}
           disabled={loading}
@@ -180,15 +186,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
           {i18n.language === "en" ? "search" : "بحث"}
         </button>
         <button
-          style={{
-            backgroundColor: "#df1616",
-            color: "white",
-            border: "none",
-            padding: "6px 12px",
-            borderRadius: 4,
-            cursor: "pointer",
-            height: "40px",
-          }}
+          style={buttonStyleResponsive}
           onClick={() => {
             setSearchResults([]);
             setSearchText("");
@@ -200,6 +198,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
         >
           {i18n.language === "en" ? "Reset" : "إعادة تعيين"}
         </button>
+
         {searchResults.length > 1 && (
           <Button
             variant="contained"
@@ -220,7 +219,6 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
         )}
       </Box>
 
-      {/* مؤشر التحميل */}
       {loading && (
         <Typography sx={{ mt: 2, color: "blue" }}>
           {i18n.language === "en" ? "Loading..." : "جاري التحميل..."}
@@ -247,7 +245,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
                     alignItems: "center",
                     cursor: "pointer",
                   }}
-                  onMouseEnter={() => setHighlightedIndex(i)} // تمييز العنصر عند المرور بالفأرة
+                  onMouseEnter={() => setHighlightedIndex(i)} 
                 >
                   <span style={{ cursor: "pointer", color: "#000" }}>
                     {g.attributes?.name || `(${t("noName") || "بدون اسم"})`}
@@ -304,7 +302,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
           {!editing ? (
             <>
               {Object.entries(selectedAttributes)
-                .filter(([key]) => key !== "uid") // تجاهل uid
+                .filter(([key]) => key !== "uid") 
                 .map(([key, value]) => (
                   <div key={key}>
                     <strong>{key}:</strong> {String(value)}
@@ -333,7 +331,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
                       label={key}
                       value={value}
                       onChange={(e) =>
-                        setEditedValues((prev:GraphicAttributes) => ({
+                        setEditedValues((prev: GraphicAttributes) => ({
                           ...prev,
                           [key]: e.target.value,
                         }))
@@ -348,14 +346,14 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
                   variant="contained"
                   color="success"
                   onClick={() => {
-                    // تعديل الرسمة
+
                     const updated = searchResults.find(
                       (g) => g.attributes.uid === selectedAttributes.uid
                     );
                     if (updated) {
                       updated.attributes = { ...editedValues };
                       setSelectedAttributes({ ...editedValues });
-                      setSuccessOpen(true); // *** هنا افتح رسالة النجاح عند الحفظ ***
+                      setSuccessOpen(true); 
                     }
                     setEditing(false);
                   }}
@@ -383,7 +381,7 @@ const handleAlertClose = (_event: React.SyntheticEvent) => {
         anchorOrigin={{ vertical: "top", horizontal: "center" }}
       >
         <Alert
-          onClose={handleAlertClose} // استخدام دالة منفصلة للـ Alert          severity="success"
+          onClose={handleAlertClose}       
           sx={{ width: "100%" }}
           variant="filled"
         >

@@ -1,4 +1,4 @@
-import { DataGrid, type GridRowSelectionModel } from "@mui/x-data-grid";
+import { DataGrid, type GridRowSelectionModel,type GridColDef } from "@mui/x-data-grid";
 import {
   TextField,
   Box,
@@ -25,38 +25,81 @@ export default function ParcelTable({
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const { i18n } = useTranslation();
-  // const [selectionModel, setSelectionModel] = useState<number[]>([]);
-const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({
-  type: "include",
-  ids: new Set<GridRowId>(),
-});
-  // تحديث الأعمدة لدعم الترجمة حسب اللغة
-  const columns = [
+
+  const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({
+    type: "include",
+    ids: new Set<GridRowId>(),
+  });
+
+  // تعريف الأعمدة مع تحديد النوع 
+  const columns: GridColDef[] = [
     {
       field: "objectid",
       headerName: i18n.language === "ar" ? "المعرف" : "ID",
       width: 80,
       filterable: true,
       flex: 0.4,
+      type: "number", 
     },
     {
-      field: "st_dist_ara",
+      field: "st_district_ar",
       headerName: i18n.language === "ar" ? "الحي (عربي)" : "District (AR)",
-      width: 120,
+      width: 180,
       filterable: true,
       flex: 1,
-      hideable: true,
+      type: "string", 
     },
     {
       field: "region",
       headerName: i18n.language === "ar" ? "المنطقة" : "Region",
-      width: 120,
+      width: 140,
+      filterable: true,
+      flex: 1,
+      type: "string",
+    },
+    {
+      field: "total_population",
+      headerName: i18n.language === "ar" ? "إجمالي السكان" : "Total Population",
+      width: 140,
+      type: "number",
       filterable: true,
       flex: 1,
     },
+    {
+      field: "citizen_males",
+      headerName: i18n.language === "ar" ? "الذكور (مواطنين)" : "Citizen Males",
+      width: 140,
+      type: "number",
+      filterable: true,
+      flex: 1,
+    },
+    {
+      field: "citizen_females",
+      headerName: i18n.language === "ar" ? "الإناث (مواطنات)" : "Citizen Females",
+      width: 140,
+      type: "number",
+      filterable: true,
+      flex: 1,
+    },
+    // انا هخفى العنصرين دول علسان شكل الجدول وواخدين مساحه كبيره 
+    // {
+    //   field: "non_citizen_males",
+    //   headerName: i18n.language === "ar" ? "الذكور غير المواطنين" : "non_citizen_males",
+    //   width: 140,
+    //   type: "number",
+    //   filterable: true,
+    //   flex: 1,
+    // },
+    // {
+    //   field: "non_citizen_females",
+    //   headerName: i18n.language === "ar" ? "الاناث غير المواطنين" : "non_citizen_females",
+    //   width: 140,
+    //   type: "number",
+    //   filterable: true,
+    //   flex: 1,
+    // },
   ];
 
-  // تحميل البيانات من API
   useEffect(() => {
     setIsLoading(true);
     axios
@@ -72,6 +115,7 @@ const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({
       )
       .then((res) => {
         const data = res.data.features.map((f: any) => ({ ...f.attributes }));
+        console.log(data)
         setRows(data);
         setFilteredRows(data);
         onExportDataRequest(data);
@@ -83,7 +127,6 @@ const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({
       });
   }, [onExportDataRequest]);
 
-  // فلترة البيانات بناءً على البحث
   useEffect(() => {
     const lower = searchText.toLowerCase();
     const filtered = rows.filter((row) =>
@@ -94,31 +137,30 @@ const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({
     setFilteredRows(filtered);
   }, [searchText, rows]);
 
-  // تحديث تحديد الصفوف عند تغيير selectedIds من الحاوي
   useEffect(() => {
     if (!rows.length) return;
 
     if (!selectedIds || selectedIds.length === 0) {
-       setSelectionModel({
-      type: "include",
-      ids: new Set(),
-    });
+      setSelectionModel({
+        type: "include",
+        ids: new Set(),
+      });
       setFilteredRows(rows);
       return;
     }
 
-    // اختيار الصفوف المحددة فقط
     const selectedRows = rows.filter((row) =>
       selectedIds.includes(Number(row.objectid))
     );
 
     setSelectionModel({
-    type: "include",
-    ids: new Set(selectedIds),
-  });
-    // إظهار الصفوف المحددة أو كل الصفوف إذا لم يوجد تطابق (حتى لا يتم إخفاء الجدول)
+      type: "include",
+      ids: new Set(selectedIds),
+    });
     setFilteredRows(selectedRows.length ? selectedRows : rows);
   }, [selectedIds, rows]);
+  
+  // وسع وسع بقى اهم جزئيه دى بتاعه الريسبونسيف Reponsive
 
   const responsiveStyles = {
     container: {
@@ -201,13 +243,13 @@ const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({
           columns={columns}
           getRowId={(row) => Number(row.objectid)}
           checkboxSelection
-         rowSelectionModel={selectionModel}
+          rowSelectionModel={selectionModel}
           onRowClick={(params) => onSelectParcel([Number(params.row.objectid)])}
           onRowSelectionModelChange={(newSelectionModel) => {
-    setSelectionModel(newSelectionModel);
-    const selectedIdsArray = Array.from(newSelectionModel.ids).map(Number);
-    onSelectParcel(selectedIdsArray.length > 0 ? selectedIdsArray : null);
-  }}
+            setSelectionModel(newSelectionModel);
+            const selectedIdsArray = Array.from(newSelectionModel.ids).map(Number);
+            onSelectParcel(selectedIdsArray.length > 0 ? selectedIdsArray : null);
+          }}
           sortingMode="client"
           filterMode="client"
           disableColumnFilter={false}

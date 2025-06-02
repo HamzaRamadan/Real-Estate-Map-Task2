@@ -42,10 +42,9 @@ graphics: state.graphics.filter((g) => g.attributes?.uid !== uid),
     set((state) => ({
       graphics: state.graphics.map((g) => {
         if (g.attributes?.uid === uid) {
-          // نحدث attributes فقط، نحتفظ بنفس geometry و symbol
           const updatedAttributes = {
             ...g.attributes,
-            uid: g.attributes?.uid, // نحافظ على uid داخل attributes
+            uid: g.attributes?.uid, 
             ...newAttrs,
           };
           return new Graphic({

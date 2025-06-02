@@ -1,4 +1,3 @@
-// src/main.tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
@@ -7,7 +6,6 @@ import { SnackbarProvider, useSnackbar } from "notistack";
 import { setSnackbarRef } from "./pages/notifier.ts";
 import "./i18n"; 
 
-// عنصر وسيط داخل الـ SnackbarProvider لتسجيل المرجع
 const SnackbarInitializer = ({ children }: { children: React.ReactNode }) => {
   const { enqueueSnackbar } = useSnackbar();
   React.useEffect(() => {

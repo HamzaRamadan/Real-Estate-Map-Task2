@@ -5,6 +5,7 @@ import Graphic from "@arcgis/core/Graphic";
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import Query from "@arcgis/core/rest/support/Query";
+import Search from "@arcgis/core/widgets/Search";
 import { useTranslation } from "react-i18next";
 import { exportToPDF } from "../pages/exportToPDF";
 import { exportToExcel } from "../pages/exportToExcel";
@@ -22,8 +23,8 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  TextField,
   Box,
+  TextField,
 } from "@mui/material";
 import { Backdrop, CircularProgress } from "@mui/material";
 
@@ -42,8 +43,10 @@ export default function ParcelMap({
   const mapDiv = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   const layerRef = useRef<FeatureLayer | null>(null);
+  const populationLayerRef = useRef<FeatureLayer | null>(null);
   const sketchLayerRef = useRef<GraphicsLayer | null>(null);
   const sketchVMRef = useRef<any>(null);
+  const highlightRef = useRef<any>(null);
   const { t, i18n } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -55,7 +58,6 @@ export default function ParcelMap({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  // const [editDrawerOpen, setEditDrawerOpen] = useState(false);
 
   useEffect(() => {
     const webMap = new WebMap({ basemap: "streets-vector" });
@@ -63,7 +65,7 @@ export default function ParcelMap({
     const view = new MapView({
       container: mapDiv.current as HTMLDivElement,
       map: webMap,
-      center: [54.37, 24.47],
+      center: [54.37, 24.47], 
       zoom: 10,
       ui: { components: ["zoom", "compass", "attribution"] },
       constraints: { snapToZoom: false },
@@ -71,15 +73,132 @@ export default function ParcelMap({
 
     onMapViewReady?.(view);
 
+    // إضافة طبقة الأراضي
     const parcelLayer = new FeatureLayer({ url: featureLayerUrl });
     webMap.add(parcelLayer);
     layerRef.current = parcelLayer;
 
+    // إضافة طبقة السكان
+    const populationLayer = new FeatureLayer({
+      url: featureLayerUrl,
+      outFields: ["District", "Region", "Total Pop", "Citizen M", "Citizen Fe"],
+      popupTemplate: {
+        title: "{District} - {Region}",
+        content: (feature: any) => {
+          const attributes = feature.graphic.attributes;
+          // console.log("Feature Attributes:", attributes); 
+          if (
+            !attributes.District &&
+            !attributes.Region &&
+            !attributes["Total Pop"] &&
+            !attributes["Citizen M"] &&
+            !attributes["Citizen Fe"]
+          ) {
+            return `
+              <div style="font-family: Arial, sans-serif; padding: 15px; background-color: #fff3f3; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
+                <p style="color: #dc3545; font-size: 16px; margin: 0; font-weight: bold;">
+                  ⚠️ لا توجد بيانات متاحة لهذه المنطقة
+                </p>
+              </div>
+            `;
+          }
+          return `
+            <div style="font-family: Arial, sans-serif; padding: 15px; background-color: #f9f9f9; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <h3 style="color: #2c3e50; font-size: 18px; margin: 0 0 10px 0; text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+                ${attributes.District || "غير متاح"} - ${
+            attributes.Region || "غير متاح"
+          }
+              </h3>
+              <ul style="list-style: none; padding: 0; margin: 0;">
+                <li style="font-size: 15px; color: #34495e; margin-bottom: 10px;">
+                  <span style="color: #007bff; font-weight: bold;">👨 الذكور:</span> ${
+                    attributes["Citizen M"] || "غير متاح"
+                  }
+                </li>
+                <li style="font-size: 15px; color: #34495e; margin-bottom: 10px;">
+                  <span style="color: #e83e8c; font-weight: bold;">👩 الإناث:</span> ${
+                    attributes["Citizen Fe"] || "غير متاح"
+                  }
+                </li>
+                <li style="font-size: 15px; color: #34495e;">
+                  <span style="color: #28a745; font-weight: bold;">📊 الإجمالي:</span> ${
+                    attributes["Total Pop"] || "غير متاح"
+                  }
+                </li>
+              </ul>
+            </div>
+          `;
+        },
+      },
+    });
+    webMap.add(populationLayer);
+    populationLayerRef.current = populationLayer;
+
+    //  طبقة الرسم
     const sketchLayer = new GraphicsLayer();
     webMap.add(sketchLayer);
     sketchLayerRef.current = sketchLayer;
 
     viewRef.current = view;
+
+    // الجزئيه بتاعه البحث اللى ف الخريطه 
+    const searchWidget = new Search({
+      view,
+      sources: [
+        {
+          layer: populationLayer,
+          searchFields: ["District"],
+          displayField: "District",
+          exactMatch: false,
+          outFields: [
+            "District",
+            "Region",
+            "Total Pop",
+            "Citizen M",
+            "Citizen Fe",
+          ],
+          name: i18n.language === "ar" ? "البحث عن الحي" : "Search District",
+          placeholder: i18n.language === "ar" ? "ابحث عن حي..." : "Search for a district...",
+        },
+      ],
+    });
+    view.ui.add(searchWidget, "top-right");
+
+    // التعامل مع اختيار نتيجة البحث
+    searchWidget.on("select-result", (event) => {
+      if (!event.result || !event.result.feature) return;
+
+      const feature = event.result.feature as Graphic;
+      if (!feature.geometry) return;
+
+      const geometry = feature.geometry as __esri.Polygon; 
+      if (!geometry.extent) return;
+
+      // لما تختار عنصر يعمل عليه ZOOM 
+      view.goTo(geometry.extent.expand(2));
+
+      // highligh للعنصر اللى اختارناه 
+      if (highlightRef.current) {
+        highlightRef.current.remove();
+      }
+      const populationLayer = populationLayerRef.current;
+      if (!populationLayer) return;
+
+      populationLayer
+        .queryObjectIds({
+          where: `District = '${feature.attributes.District}'`,
+        })
+        .then((ids) => {
+          if (ids.length > 0) {
+            view.whenLayerView(populationLayer).then((layerView) => {
+              if ("highlight" in layerView) {
+                const highlight = (layerView as __esri.FeatureLayerView).highlight(ids);
+                highlightRef.current = highlight;
+              }
+            });
+          }
+        });
+    });
 
     view.when(() => {
       setIsLoading(false);
@@ -107,21 +226,19 @@ export default function ParcelMap({
     }
 
     const clickHandler = view.on("click", async (event) => {
-      // const screenPoint = event.screenPoint;
       const screenPoint = {
-  x: event.x,
-  y: event.y,
-};
+        x: event.x,
+        y: event.y,
+      };
       const hit = await view.hitTest(screenPoint);
       const sketchLayer = sketchLayerRef.current;
       if (!sketchLayer) return;
 
       const userDrawingHit = hit.results.find(
-  (result) => 'graphic' in result && result.graphic.layer === sketchLayer
-);
+        (result) => "graphic" in result && result.graphic.layer === sketchLayer
+      );
 
-
-if (userDrawingHit && 'graphic' in userDrawingHit) {
+      if (userDrawingHit && "graphic" in userDrawingHit) {
         const clickedGraphic = userDrawingHit.graphic;
         const clickedUID = clickedGraphic.attributes?.uid;
 
@@ -149,11 +266,6 @@ if (userDrawingHit && 'graphic' in userDrawingHit) {
         }
 
         setSelectedGraphics(newSelected);
-
-        if (!isSelected && newSelected.length === 1) {
-          // setEditDrawerOpen(true);
-        }
-
         return;
       }
 
@@ -195,8 +307,11 @@ if (userDrawingHit && 'graphic' in userDrawingHit) {
       sketchVM.destroy();
       view.destroy();
       viewRef.current = null;
+      if (highlightRef.current) {
+        highlightRef.current.remove();
+      }
     };
-  }, [onMapViewReady, onSelectFromMap, t]);
+  }, [onMapViewReady, onSelectFromMap, t, i18n.language]);
 
   useEffect(() => {
     if (!viewRef.current || !layerRef.current) return;
@@ -276,6 +391,7 @@ if (userDrawingHit && 'graphic' in userDrawingHit) {
     exportToPDF(graphics, t, viewRef, enqueueSnackbar);
   };
 
+  // وسع وسع بقى اهم جزئيه دى بتاعه الريسبونسيف Reponsive
   const responsiveStyles = {
     container: {
       display: "flex",
@@ -523,11 +639,6 @@ if (userDrawingHit && 'graphic' in userDrawingHit) {
           </Button>
         </DialogActions>
       </Dialog>
-
-      
     </Box>
   );
 }
-
-
-// https://grok.com/share/c2hhcmQtMg%3D%3D_83440240-d234-42b5-b43b-7231c0f2f8dc

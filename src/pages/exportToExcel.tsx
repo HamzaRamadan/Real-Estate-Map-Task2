@@ -1,8 +1,6 @@
 import * as XLSX from "xlsx";
-import i18n from "../i18n"; // تأكد من وجود i18n لو بتستخدم اللغة
+import i18n from "../i18n"; 
 import Graphic from "@arcgis/core/Graphic";
-
-
 
 interface ExportToExcelParams {
   graphics: Graphic[];
@@ -30,22 +28,35 @@ export function exportToExcel({
 
   const dataForExcel = graphics.map((g) => ({
     [t("name") || "الاسم"]: g.attributes?.name || "",
-    [t("type") || "النوع"]:
-      g.geometry?.type === "polygon"
-        ? t("polygon") || "مضلع"
-        : t("polyline") || "خط",
+    [t("type") || "النوع"]: g.geometry?.type === "polygon" ? t("polygon") || "مضلع" : t("polyline") || "خط",
     [t("description") || "الوصف"]: g.attributes?.description || "",
     [t("date") || "التاريخ"]: g.attributes?.createdAt || "",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+
+  if (i18n.language === "ar") {
+    const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+        if (worksheet[cellAddress]) {
+          worksheet[cellAddress].t = "s"; 
+          worksheet[cellAddress].z = "@"; 
+        }
+      }
+    }
+  }
+
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(
     workbook,
     worksheet,
     t("userDrawings") || "رسومات المستخدم"
   );
-  XLSX.writeFile(workbook, "رسومات_المستخدم.xlsx");
+
+  // تصدير الملف
+  XLSX.writeFile(workbook, `${t("userDrawings") || "رسومات_المستخدم"}.xlsx`);
 
   enqueueSnackbar(
     i18n.language === "en"

@@ -14,7 +14,7 @@ type SetupSketchOptions = {
   t: (key: string) => string;
   setGraphics: React.Dispatch<React.SetStateAction<Graphic[]>>;
   setSelectedGraphics: React.Dispatch<React.SetStateAction<Graphic[]>>;
-  onCreateGraphic: (graphic: __esri.Graphic) => void; // ✅ تُمرر من ParcelMap
+  onCreateGraphic: (graphic: __esri.Graphic) => void; 
 };
 
 export function initializeSketchVM({
@@ -34,14 +34,12 @@ export function initializeSketchVM({
   sketchLayer.addMany(savedGraphics);
   setGraphics(savedGraphics);
 
-  // التعامل مع عملية الإنشاء
   sketchVM.on("create", (event) => {
     if (event.state === "complete") {
-      onCreateGraphic(event.graphic); // ✅ تمرير الرسم لمكون ParcelMap ليتم التعامل معه هناك
+      onCreateGraphic(event.graphic); 
     }
   });
 
-  // التعامل مع عملية الحذف
   sketchVM.on("delete", (event) => {
     const deletedUIDs = event.graphics.map((g) => g.attributes?.uid);
     setGraphics((prevGraphics) => {
@@ -54,7 +52,6 @@ export function initializeSketchVM({
     setSelectedGraphics([]);
   });
 
-  // التعامل مع التعديل
   sketchVM.on("update", (event) => {
     if (event.state === "complete") {
       const currentGraphics = sketchLayer.graphics.toArray();
