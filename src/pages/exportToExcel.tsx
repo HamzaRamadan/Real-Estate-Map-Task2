@@ -1,18 +1,8 @@
 import * as XLSX from "xlsx";
 import i18n from "../i18n"; // تأكد من وجود i18n لو بتستخدم اللغة
+import Graphic from "@arcgis/core/Graphic";
 
-interface GraphicAttributes {
-  name?: string;
-  description?: string;
-  createdAt?: string;
-}
 
-interface Graphic {
-  attributes?: GraphicAttributes;
-  geometry: {
-    type: string;
-  };
-}
 
 interface ExportToExcelParams {
   graphics: Graphic[];
@@ -41,7 +31,7 @@ export function exportToExcel({
   const dataForExcel = graphics.map((g) => ({
     [t("name") || "الاسم"]: g.attributes?.name || "",
     [t("type") || "النوع"]:
-      g.geometry.type === "polygon"
+      g.geometry?.type === "polygon"
         ? t("polygon") || "مضلع"
         : t("polyline") || "خط",
     [t("description") || "الوصف"]: g.attributes?.description || "",

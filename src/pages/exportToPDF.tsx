@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import { font } from "../utils/fonts/Amiri-Regular-normal.js";
 import i18n from "../i18n"; // تأكد أنك مستورد i18n
 
+
 export async function exportToPDF(
   graphics: any[],
   t: (key: string) => string,
@@ -58,8 +59,9 @@ export async function exportToPDF(
     },
     alternateRowStyles: { fillColor: [245, 245, 245] },
   });
+  
+const finalY = (doc as any).lastAutoTable?.finalY || 50;
 
-  const finalY = doc.lastAutoTable.finalY || 50;
   doc.addImage(screenshot.dataUrl, "PNG", 15, finalY + 10, 180, 100);
 
   doc.save("رسومات_المستخدم.pdf");

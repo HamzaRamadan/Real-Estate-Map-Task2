@@ -45,13 +45,13 @@ graphics: state.graphics.filter((g) => g.attributes?.uid !== uid),
           // نحدث attributes فقط، نحتفظ بنفس geometry و symbol
           const updatedAttributes = {
             ...g.attributes,
+            uid: g.attributes?.uid, // نحافظ على uid داخل attributes
             ...newAttrs,
           };
           return new Graphic({
             geometry: g.geometry,
             symbol: g.symbol,
             attributes: updatedAttributes,
-            uid: g.attributes?.uid, // مهم نحافظ على نفس uid
           });
         }
         return g;

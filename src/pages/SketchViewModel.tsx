@@ -1,7 +1,6 @@
 // src/utils/initSketchVM.ts
 import SketchViewModel from "@arcgis/core/widgets/Sketch/SketchViewModel";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
-import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
 import Graphic from "@arcgis/core/Graphic";
 import MapView from "@arcgis/core/views/MapView";
 import {
@@ -21,7 +20,6 @@ type SetupSketchOptions = {
 export function initializeSketchVM({
   view,
   sketchLayer,
-  t,
   setGraphics,
   setSelectedGraphics,
   onCreateGraphic,

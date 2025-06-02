@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import ParcelMap from "./ParcelMap";
 import ParcelTable from "./ParcelTable";
 import * as XLSX from "xlsx";
@@ -12,9 +12,14 @@ export default function ParcelContainer() {
   const { t, i18n } = useTranslation();
   const mapViewRef = useRef<any>(null);
 
-  const handleSelect = (id: number | null) => {
-    console.log("Selected ID:", id);
-    setSelectedId(id);
+  // ✅ عدّلنا الدالة دي لتأخذ ids كمصفوفة
+  const handleSelect = (ids: number[] | null) => {
+    console.log("Selected IDs:", ids);
+    if (Array.isArray(ids) && ids.length > 0) {
+      setSelectedId(ids[0]); // خد أول واحد فقط
+    } else {
+      setSelectedId(null);
+    }
   };
 
   const clearSelection = () => {
@@ -83,10 +88,6 @@ export default function ParcelContainer() {
     document.dir = newLang === "ar" ? "rtl" : "ltr";
   };
 
-  useEffect(() => {
-    console.log("Current language:", i18n.language);
-  }, [i18n.language]);
-
   const responsiveStyles = {
     container: {
       display: "flex",
@@ -107,13 +108,13 @@ export default function ParcelContainer() {
       bgcolor: "grey.100",
       borderBottom: "1px solid",
       borderColor: "divider",
-      mb: { xs: 1, sm: 2 }, // مسافة تحت الـ header
+      mb: { xs: 1, sm: 2 },
     },
     content: {
       display: "flex",
       flexDirection: { xs: "column", sm: "row" },
       flex: 1,
-      gap: { xs: 2, sm: 2.5 }, // زيادة المسافة بين الخريطة والجدول
+      gap: { xs: 2, sm: 2.5 },
       width: "100%",
       maxWidth: "100vw",
     },
@@ -121,7 +122,7 @@ export default function ParcelContainer() {
       flex: { xs: "none", sm: 1 },
       display: "flex",
       flexDirection: "column",
-      gap: { xs: 2, sm: 2 }, // مسافة بين الخريطة وأزرارها
+      gap: { xs: 2, sm: 2 },
       height: { xs: "auto", sm: "100%" },
       width: { xs: "100%", sm: "50%" },
       maxWidth: "100vw",
@@ -137,7 +138,7 @@ export default function ParcelContainer() {
       maxHeight: { sm: "100vh" },
       p: { xs: 1, sm: 2 },
       boxSizing: "border-box",
-      mt: { xs: 2, sm: 0 }, // مسافة فوق الجدول على الموبايل
+      mt: { xs: 2, sm: 0 },
     },
     button: (bg: string) => ({
       bgcolor: bg,
@@ -197,7 +198,7 @@ export default function ParcelContainer() {
         <Box sx={responsiveStyles.mapContainer}>
           <ParcelMap
             selectedId={selectedId}
-            onSelectFromMap={handleSelect}
+            onSelectFromMap={(id) => setSelectedId(id)}
             onMapViewReady={(view) => {
               mapViewRef.current = view;
             }}
@@ -207,7 +208,7 @@ export default function ParcelContainer() {
         <Box sx={responsiveStyles.tableContainer}>
           <Box sx={{ flex: 1, maxHeight: { sm: "calc(100vh - 80px)" }, overflowY: "auto" }}>
             <ParcelTable
-              selectedId={selectedId}
+  selectedIds={selectedId ? [selectedId] : null}
               onSelectParcel={handleSelect}
               onExportDataRequest={setParcels}
             />

@@ -6,7 +6,7 @@ const LOCAL_STORAGE_KEY = "user_drawings";
 
 export function saveGraphicsToLocalStorage(graphicsToSave: Graphic[]) {
   const dataToSave = graphicsToSave.map((g) => ({
-    geometry: g.geometry.toJSON(),
+  geometry: g.geometry ? g.geometry.toJSON() : null,
     attributes: g.attributes || {},
   }));
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));

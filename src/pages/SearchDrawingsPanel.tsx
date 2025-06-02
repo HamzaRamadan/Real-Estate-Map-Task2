@@ -7,6 +7,7 @@ import {
   Typography,
   Snackbar,
   Alert,
+  type SnackbarCloseReason,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -15,7 +16,11 @@ interface Props {
   view: __esri.MapView | null;
   onSelectGraphic: (graphic: Graphic) => void;
 }
-
+interface GraphicAttributes {
+  uid: string;
+  name?: string;
+  [key: string]: any; // للسماح بخصائص ديناميكية إضافية
+}
 export default function SearchDrawingsPanel({
   graphics,
   view,
@@ -30,9 +35,7 @@ export default function SearchDrawingsPanel({
   const { t, i18n } = useTranslation();
 
   const [editing, setEditing] = useState(false);
-  const [editedValues, setEditedValues] = useState<any>({});
-
-  // حالة مؤشر التحميل
+const [editedValues, setEditedValues] = useState<GraphicAttributes>({ uid: "" });  // حالة مؤشر التحميل
   const [loading, setLoading] = useState(false);
 
   // حالة اختيار العنصر في التنقل بلوحة المفاتيح
@@ -101,34 +104,38 @@ export default function SearchDrawingsPanel({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      if (highlightedIndex !== null && searchResults[highlightedIndex]) {
-        handleSelect(searchResults[highlightedIndex]);
-      } else {
-        handleSearch();
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlightedIndex((prev) =>
-        prev === null || prev === searchResults.length - 1 ? 0 : prev + 1
-      );
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlightedIndex((prev) =>
-        prev === null || prev === 0 ? searchResults.length - 1 : prev - 1
-      );
+ const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === "Enter") {
+    if (highlightedIndex !== null && searchResults[highlightedIndex]) {
+      handleSelect(searchResults[highlightedIndex]);
+    } else {
+      handleSearch();
     }
-  };
+  } else if (e.key === "ArrowDown") {
+    e.preventDefault();
+    setHighlightedIndex((prev: number | null) =>
+      prev === null || prev === searchResults.length - 1 ? 0 : prev + 1
+    );
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    setHighlightedIndex((prev: number | null) =>
+      prev === null || prev === 0 ? searchResults.length - 1 : prev - 1
+    );
+  }
+};
 
   // دالة إغلاق رسالة النجاح
-  const handleSuccessClose = (
-    event?: React.SyntheticEvent | Event,
-    reason?: string
-  ) => {
-    if (reason === "clickaway") return;
-    setSuccessOpen(false);
-  };
+const handleSuccessClose = (
+  _event: React.SyntheticEvent | Event,
+  reason: SnackbarCloseReason
+) => {
+  if (reason === "clickaway") return;
+  setSuccessOpen(false);
+};
+// دالة إغلاق الـ Alert
+const handleAlertClose = (_event: React.SyntheticEvent) => {
+  setSuccessOpen(false);
+};
 
   return (
     <div style={{ marginBottom: 20, marginTop: 20 }}>
@@ -326,7 +333,7 @@ export default function SearchDrawingsPanel({
                       label={key}
                       value={value}
                       onChange={(e) =>
-                        setEditedValues((prev) => ({
+                        setEditedValues((prev:GraphicAttributes) => ({
                           ...prev,
                           [key]: e.target.value,
                         }))
@@ -376,8 +383,7 @@ export default function SearchDrawingsPanel({
         anchorOrigin={{ vertical: "top", horizontal: "center" }}
       >
         <Alert
-          onClose={handleSuccessClose}
-          severity="success"
+          onClose={handleAlertClose} // استخدام دالة منفصلة للـ Alert          severity="success"
           sx={{ width: "100%" }}
           variant="filled"
         >

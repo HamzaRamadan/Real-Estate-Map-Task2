@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MapView from "@arcgis/core/views/MapView";
 import WebMap from "@arcgis/core/WebMap";
 import Graphic from "@arcgis/core/Graphic";
@@ -49,14 +49,13 @@ export default function ParcelMap({
 
   const [graphics, setGraphics] = useState<Graphic[]>([]);
   const [selectedGraphics, setSelectedGraphics] = useState<Graphic[]>([]);
-  const [selectedGraphic, setSelectedGraphic] = useState<Graphic | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [newGraphic, setNewGraphic] = useState<Graphic | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  // const [editDrawerOpen, setEditDrawerOpen] = useState(false);
 
   useEffect(() => {
     const webMap = new WebMap({ basemap: "streets-vector" });
@@ -108,16 +107,21 @@ export default function ParcelMap({
     }
 
     const clickHandler = view.on("click", async (event) => {
-      const screenPoint = event.screenPoint;
+      // const screenPoint = event.screenPoint;
+      const screenPoint = {
+  x: event.x,
+  y: event.y,
+};
       const hit = await view.hitTest(screenPoint);
       const sketchLayer = sketchLayerRef.current;
       if (!sketchLayer) return;
 
       const userDrawingHit = hit.results.find(
-        (result) => result.graphic.layer === sketchLayer
-      );
+  (result) => 'graphic' in result && result.graphic.layer === sketchLayer
+);
 
-      if (userDrawingHit) {
+
+if (userDrawingHit && 'graphic' in userDrawingHit) {
         const clickedGraphic = userDrawingHit.graphic;
         const clickedUID = clickedGraphic.attributes?.uid;
 
@@ -147,8 +151,7 @@ export default function ParcelMap({
         setSelectedGraphics(newSelected);
 
         if (!isSelected && newSelected.length === 1) {
-          setSelectedGraphic(clickedGraphic);
-          setEditDrawerOpen(true);
+          // setEditDrawerOpen(true);
         }
 
         return;
@@ -345,7 +348,6 @@ export default function ParcelMap({
         graphics={graphics}
         view={viewRef.current}
         onSelectGraphic={(graphic) => setSelectedGraphics([graphic])}
-        t={t}
       />
 
       <Box sx={responsiveStyles.buttonContainer}>
@@ -526,3 +528,6 @@ export default function ParcelMap({
     </Box>
   );
 }
+
+
+// https://grok.com/share/c2hhcmQtMg%3D%3D_83440240-d234-42b5-b43b-7231c0f2f8dc
