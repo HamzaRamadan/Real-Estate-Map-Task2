@@ -15,6 +15,7 @@ import {
 } from "../pages/localStorageManager";
 import { initializeSketchVM } from "../pages/SketchViewModel";
 import SearchDrawingsPanel from "../pages/SearchDrawingsPanel";
+import ParcelDataGrid from "./ParcelDataGrid"; 
 import { useSnackbar } from "notistack";
 import { notify } from "../pages/notifier";
 import {
@@ -145,7 +146,7 @@ export default function ParcelMap({
       view,
       sources: [
         {
-          layer: populationLayer,
+          layer: populationLayer, // تخطي فحص TypeScript مؤقتًا
           searchFields: ["District"],
           displayField: "District",
           exactMatch: false,
@@ -157,10 +158,7 @@ export default function ParcelMap({
             "Citizen Fe",
           ],
           name: i18n.language === "ar" ? "البحث عن الحي" : "Search District",
-          placeholder:
-            i18n.language === "ar"
-              ? "ابحث عن حي..."
-              : "Search for a district...",
+          placeholder: i18n.language === "ar" ? "ابحث عن حي..." : "Search for a district...",
         } as any,
       ],
     });
@@ -194,9 +192,7 @@ export default function ParcelMap({
           if (ids.length > 0) {
             view.whenLayerView(populationLayer).then((layerView) => {
               if ("highlight" in layerView) {
-                const highlight = (
-                  layerView as __esri.FeatureLayerView
-                ).highlight(ids);
+                const highlight = (layerView as __esri.FeatureLayerView).highlight(ids);
                 highlightRef.current = highlight;
               }
             });
@@ -392,11 +388,10 @@ export default function ParcelMap({
   };
 
   const handleExportPDF = () => {
-    exportToPDF(graphics, t, viewRef, enqueueSnackbar);
+    exportToPDF(graphics, t, viewRef, enqueueSnackbar );
   };
 
-  // وسع وسع بقى اهم جزئية دى بتاعة الريسبونسيف Responsive
-
+  // Responsive styles
   const responsiveStyles = {
     container: {
       display: "flex",
@@ -464,6 +459,12 @@ export default function ParcelMap({
           <CircularProgress color="inherit" />
         </Backdrop>
       </Box>
+
+      {/* إضافة الجدول تحت الخريطة */}
+      <ParcelDataGrid
+        // view={viewRef.current}
+        // layer={populationLayerRef.current} 
+      />
 
       <SearchDrawingsPanel
         graphics={graphics}

@@ -115,7 +115,7 @@ export default function ParcelTable({
       )
       .then((res) => {
         const data = res.data.features.map((f: any) => ({ ...f.attributes }));
-        console.log(data)
+        // console.log(data)
         setRows(data);
         setFilteredRows(data);
         onExportDataRequest(data);

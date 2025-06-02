@@ -1,21 +1,93 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import ParcelMap from "./ParcelMap";
 import ParcelTable from "./ParcelTable";
 import * as XLSX from "xlsx";
 import { useTranslation } from "react-i18next";
 import { exportToPDF } from "../utils/exportToPDF";
-import { Box, Button } from "@mui/material";
+import { Box, Button, CircularProgress, Typography } from "@mui/material";
+
+// مكون شاشة التحميل مع أنيميشن دوران وتوهج
+const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
+  <Box
+    sx={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      bgcolor: "rgba(0, 0, 0, 0.85)", // خلفية داكنة شبه شفافة
+      zIndex: 9999,
+      color: "white",
+      animation: "fadeIn 0.5s ease-in-out",
+      "@keyframes fadeIn": {
+        from: { opacity: 0 },
+        to: { opacity: 1 },
+      },
+    }}
+  >
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        animation: "rotate 1.5s linear infinite, glow 2s ease-in-out infinite",
+        "@keyframes rotate": {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(360deg)" },
+        },
+        "@keyframes glow": {
+          "0%": { boxShadow: "0 0 10px 5px rgba(0, 123, 255, 0.3)" },
+          "50%": { boxShadow: "0 0 20px 10px rgba(0, 123, 255, 0.7)" },
+          "100%": { boxShadow: "0 0 10px 5px rgba(0, 123, 255, 0.3)" },
+        },
+      }}
+    >
+      <CircularProgress
+        size={90}
+        thickness={4.5}
+        sx={{ color: "#007bff" }}
+      />
+    </Box>
+    <Typography
+      variant="h5"
+      sx={{
+        mt: 2,
+        fontWeight: "bold",
+        textAlign: "center",
+        fontSize: { xs: "1.2rem", sm: "1.5rem" },
+        letterSpacing: 1.2,
+        textShadow: "0 0 5px rgba(255, 255, 255, 0.5)",
+      }}
+    >
+      {message}
+    </Typography>
+  </Box>
+);
 
 export default function ParcelContainer() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [parcels, setParcels] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true); // حالة تحميل الموقع
   const { t, i18n } = useTranslation();
   const mapViewRef = useRef<any>(null);
+
+  // إيقاف شاشة التحميل بعد وقت معين
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 3000); // 3 ثوانٍ (يمكن تعديل الوقت حسب الحاجة)
+
+    return () => clearTimeout(timer); // تنظيف المؤقت
+  }, []);
 
   const handleSelect = (ids: number[] | null) => {
     console.log("Selected IDs:", ids);
     if (Array.isArray(ids) && ids.length > 0) {
-      setSelectedId(ids[0]); 
+      setSelectedId(ids[0]);
     } else {
       setSelectedId(null);
     }
@@ -40,7 +112,6 @@ export default function ParcelContainer() {
       return;
     }
 
-    // تحضير البيانات بناءً على الأعمدة المحددة
     const data = parcels.map((parcel) =>
       columns.reduce((row: any, col) => {
         row[col.title] = parcel[col.field] ?? "غير متاح";
@@ -56,8 +127,8 @@ export default function ParcelContainer() {
         for (let C = range.s.c; C <= range.e.c; ++C) {
           const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
           if (worksheet[cellAddress]) {
-            worksheet[cellAddress].t = "s"; 
-            worksheet[cellAddress].z = "@"; 
+            worksheet[cellAddress].t = "s";
+            worksheet[cellAddress].z = "@";
           }
         }
       }
@@ -120,8 +191,6 @@ export default function ParcelContainer() {
     document.dir = newLang === "ar" ? "rtl" : "ltr";
   };
 
-    // وسع وسع بقى اهم جزئيه دى بتاعه الريسبونسيف Reponsive
-
   const responsiveStyles = {
     container: {
       display: "flex",
@@ -131,6 +200,7 @@ export default function ParcelContainer() {
       maxWidth: "100vw",
       overflowX: "hidden",
       bgcolor: "background.default",
+      position: "relative",
     },
     header: {
       display: "flex",
@@ -143,6 +213,7 @@ export default function ParcelContainer() {
       borderBottom: "1px solid",
       borderColor: "divider",
       mb: { xs: 1, sm: 2 },
+      zIndex: 1000,
     },
     content: {
       display: "flex",
@@ -190,6 +261,7 @@ export default function ParcelContainer() {
 
   return (
     <Box sx={responsiveStyles.container}>
+      {isLoading && <LoadingScreen message={t("loading") || "جاري التحميل..."} />}
       <Box sx={responsiveStyles.header}>
         <Button
           sx={responsiveStyles.button("#6c757d")}
