@@ -65,7 +65,7 @@ export default function ParcelMap({
     const view = new MapView({
       container: mapDiv.current as HTMLDivElement,
       map: webMap,
-      center: [54.37, 24.47], 
+      center: [54.37, 24.47],
       zoom: 10,
       ui: { components: ["zoom", "compass", "attribution"] },
       constraints: { snapToZoom: false },
@@ -86,7 +86,6 @@ export default function ParcelMap({
         title: "{District} - {Region}",
         content: (feature: any) => {
           const attributes = feature.graphic.attributes;
-          // console.log("Feature Attributes:", attributes); 
           if (
             !attributes.District &&
             !attributes.Region &&
@@ -134,14 +133,14 @@ export default function ParcelMap({
     webMap.add(populationLayer);
     populationLayerRef.current = populationLayer;
 
-    //  طبقة الرسم
+    // طبقة الرسم
     const sketchLayer = new GraphicsLayer();
     webMap.add(sketchLayer);
     sketchLayerRef.current = sketchLayer;
 
     viewRef.current = view;
 
-    // الجزئيه بتاعه البحث اللى ف الخريطه 
+    // الجزئية بتاعة البحث اللي في الخريطة
     const searchWidget = new Search({
       view,
       sources: [
@@ -158,8 +157,11 @@ export default function ParcelMap({
             "Citizen Fe",
           ],
           name: i18n.language === "ar" ? "البحث عن الحي" : "Search District",
-          placeholder: i18n.language === "ar" ? "ابحث عن حي..." : "Search for a district...",
-        },
+          placeholder:
+            i18n.language === "ar"
+              ? "ابحث عن حي..."
+              : "Search for a district...",
+        } as any,
       ],
     });
     view.ui.add(searchWidget, "top-right");
@@ -171,13 +173,13 @@ export default function ParcelMap({
       const feature = event.result.feature as Graphic;
       if (!feature.geometry) return;
 
-      const geometry = feature.geometry as __esri.Polygon; 
+      const geometry = feature.geometry as __esri.Polygon;
       if (!geometry.extent) return;
 
-      // لما تختار عنصر يعمل عليه ZOOM 
+      // لما تختار عنصر يعمل عليه ZOOM
       view.goTo(geometry.extent.expand(2));
 
-      // highligh للعنصر اللى اختارناه 
+      // highlight للعنصر اللي اختارناه
       if (highlightRef.current) {
         highlightRef.current.remove();
       }
@@ -192,7 +194,9 @@ export default function ParcelMap({
           if (ids.length > 0) {
             view.whenLayerView(populationLayer).then((layerView) => {
               if ("highlight" in layerView) {
-                const highlight = (layerView as __esri.FeatureLayerView).highlight(ids);
+                const highlight = (
+                  layerView as __esri.FeatureLayerView
+                ).highlight(ids);
                 highlightRef.current = highlight;
               }
             });
@@ -391,7 +395,8 @@ export default function ParcelMap({
     exportToPDF(graphics, t, viewRef, enqueueSnackbar);
   };
 
-  // وسع وسع بقى اهم جزئيه دى بتاعه الريسبونسيف Reponsive
+  // وسع وسع بقى اهم جزئية دى بتاعة الريسبونسيف Responsive
+
   const responsiveStyles = {
     container: {
       display: "flex",
