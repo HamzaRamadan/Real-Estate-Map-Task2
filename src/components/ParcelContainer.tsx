@@ -1,10 +1,14 @@
 import { useRef, useState, useEffect } from "react";
+// @ts-ignore - سيتم استخدامها لاحقاً
 import ParcelMap from "./ParcelMap";
+// @ts-ignore - سيتم استخدامها لاحقاً
 import ParcelTable from "./ParcelTable";
 import * as XLSX from "xlsx";
 import { useTranslation } from "react-i18next";
+// @ts-ignore - سيتم استخدامها لاحقاً
 import { exportToPDF } from "../utils/exportToPDF";
-import { Box, Button, CircularProgress, Typography } from "@mui/material";
+import { Box, CircularProgress, Typography } from "@mui/material";
+import Dashboard from "../pages/Dashboard";
 
 // مكون شاشة التحميل مع أنيميشن دوران وتوهج
 const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
@@ -19,7 +23,7 @@ const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
       flexDirection: "column",
       justifyContent: "center",
       alignItems: "center",
-      bgcolor: "rgba(0, 0, 0, 0.85)", // خلفية داكنة شبه شفافة
+      bgcolor: "rgba(0, 0, 0, 0.85)", 
       zIndex: 9999,
       color: "white",
       animation: "fadeIn 0.5s ease-in-out",
@@ -69,21 +73,24 @@ const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
 );
 
 export default function ParcelContainer() {
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const [parcels, setParcels] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // حالة تحميل الموقع
+  const [isLoading, setIsLoading] = useState(true); 
   const { t, i18n } = useTranslation();
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const mapViewRef = useRef<any>(null);
 
-  // إيقاف شاشة التحميل بعد وقت معين
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 3000); // 3 ثوانٍ (يمكن تعديل الوقت حسب الحاجة)
+    }, 3000); 
 
-    return () => clearTimeout(timer); // تنظيف المؤقت
+    return () => clearTimeout(timer); 
   }, []);
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const handleSelect = (ids: number[] | null) => {
     console.log("Selected IDs:", ids);
     if (Array.isArray(ids) && ids.length > 0) {
@@ -93,10 +100,12 @@ export default function ParcelContainer() {
     }
   };
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const clearSelection = () => {
     setSelectedId(null);
   };
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const columns = [
     { field: "objectid", title: i18n.language === "ar" ? "المعرف" : "ID" },
     { field: "st_district_ar", title: i18n.language === "ar" ? "الحي (عربي)" : "District (AR)" },
@@ -106,6 +115,7 @@ export default function ParcelContainer() {
     { field: "citizen_females", title: i18n.language === "ar" ? "الإناث (مواطنات)" : "Citizen Females" },
   ];
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const handleExportExcel = () => {
     if (parcels.length === 0) {
       alert(t("noDataToExport") || "لا يوجد بيانات للتصدير!");
@@ -156,6 +166,7 @@ export default function ParcelContainer() {
     URL.revokeObjectURL(url);
   };
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const handleExportPDF = () => {
     console.log("Exporting PDF with parcels:", parcels);
     if (parcels.length === 0) {
@@ -165,6 +176,7 @@ export default function ParcelContainer() {
     exportToPDF(parcels, i18n.language === "ar" ? "بيانات القطع" : "Parcel Data", columns);
   };
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const handleExportMapImage = async () => {
     const view = mapViewRef.current;
     if (!view) {
@@ -185,12 +197,14 @@ export default function ParcelContainer() {
     }
   };
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const toggleLanguage = () => {
     const newLang = i18n.language === "ar" ? "en" : "ar";
     i18n.changeLanguage(newLang);
     document.dir = newLang === "ar" ? "rtl" : "ltr";
   };
 
+  // @ts-ignore - سيتم استخدامها لاحقاً
   const responsiveStyles = {
     container: {
       display: "flex",
@@ -262,65 +276,7 @@ export default function ParcelContainer() {
   return (
     <Box sx={responsiveStyles.container}>
       {isLoading && <LoadingScreen message={t("loading") || "جاري التحميل..."} />}
-      <Box sx={responsiveStyles.header}>
-        <Button
-          sx={responsiveStyles.button("#6c757d")}
-          onClick={toggleLanguage}
-          startIcon={<span>🌐</span>}
-        >
-          {i18n.language === "ar" ? "English" : "العربية"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#007bff")}
-          onClick={clearSelection}
-          startIcon={<span>🧹</span>}
-        >
-          {i18n.language === "en" ? "Clear Selection" : "مسح التحديد"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#dc3545")}
-          onClick={handleExportPDF}
-          startIcon={<span>📄</span>}
-        >
-          {i18n.language === "en" ? "Export PDF" : "تصدير إلى PDF"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#28a745")}
-          onClick={handleExportExcel}
-          startIcon={<span>📊</span>}
-        >
-          {i18n.language === "en" ? "Export Excel" : "تصدير إلى Excel"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#17a2b8")}
-          onClick={handleExportMapImage}
-          startIcon={<span>📸</span>}
-        >
-          {i18n.language === "en" ? "Export Map Image" : "تصدير صورة الخريطة"}
-        </Button>
-      </Box>
-
-      <Box sx={responsiveStyles.content}>
-        <Box sx={responsiveStyles.mapContainer}>
-          <ParcelMap
-            selectedId={selectedId}
-            onSelectFromMap={(id) => setSelectedId(id)}
-            onMapViewReady={(view) => {
-              mapViewRef.current = view;
-            }}
-          />
-        </Box>
-
-        <Box sx={responsiveStyles.tableContainer}>
-          <Box sx={{ flex: 1, maxHeight: { sm: "calc(100vh - 80px)" }, overflowY: "auto" }}>
-            <ParcelTable
-              selectedIds={selectedId ? [selectedId] : null}
-              onSelectParcel={handleSelect}
-              onExportDataRequest={setParcels}
-            />
-          </Box>
-        </Box>
-      </Box>
+      <Dashboard/>
     </Box>
   );
 }

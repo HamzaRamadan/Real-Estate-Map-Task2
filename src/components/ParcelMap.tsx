@@ -1,655 +1,720 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import MapView from "@arcgis/core/views/MapView";
 import WebMap from "@arcgis/core/WebMap";
 import Graphic from "@arcgis/core/Graphic";
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import Query from "@arcgis/core/rest/support/Query";
-import Search from "@arcgis/core/widgets/Search";
 import { useTranslation } from "react-i18next";
-import { exportToPDF } from "../pages/exportToPDF";
-import { exportToExcel } from "../pages/exportToExcel";
 import {
-  saveGraphicsToLocalStorage,
-  loadGraphicsFromLocalStorage,
-} from "../pages/localStorageManager";
-import { initializeSketchVM } from "../pages/SketchViewModel";
-import SearchDrawingsPanel from "../pages/SearchDrawingsPanel";
-import ParcelDataGrid from "./ParcelDataGrid";
-import { useSnackbar } from "notistack";
-import { notify } from "../pages/notifier";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   Box,
-  TextField,
+  Typography,
+  Button,
+  Backdrop,
+  CircularProgress,
 } from "@mui/material";
-import { Backdrop, CircularProgress } from "@mui/material";
+import Expand from "@arcgis/core/widgets/Expand";
+import LayerList from "@arcgis/core/widgets/LayerList";
+import Sketch from "@arcgis/core/widgets/Sketch";
+import Point from "@arcgis/core/geometry/Point";
+import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol";
+import debounce from "lodash/debounce";
+
+interface PopulationData {
+  id: number;
+  location: string;
+  region: string;
+  coordinates: string;
+  users: number;
+  status: string;
+  lastUpdated: string;
+  OBJECTID?: number;
+}
+
+interface ParcelMapProps {
+  selectedId: number | null;
+  onSelectFromMap: (id: number) => void;
+  onMapViewReady?: (view: MapView) => void;
+  filter?: string | null;
+  data: PopulationData[];
+}
+
+interface ParcelMapRef {
+  updateFilter: (region: string | null) => void;
+}
 
 const featureLayerUrl =
   "https://infomapapp.com/ksaarcgis/rest/services/Hosted/AbuDhabi_Boundary/FeatureServer/2";
 
-export default function ParcelMap({
-  selectedId,
-  onSelectFromMap,
-  onMapViewReady,
-}: {
-  selectedId: number | null;
-  onSelectFromMap: (id: number) => void;
-  onMapViewReady?: (view: MapView) => void;
-}) {
-  const mapDiv = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<MapView | null>(null);
-  const layerRef = useRef<FeatureLayer | null>(null);
-  const populationLayerRef = useRef<FeatureLayer | null>(null);
-  const sketchLayerRef = useRef<GraphicsLayer | null>(null);
-  const sketchVMRef = useRef<any>(null);
-  const highlightRef = useRef<any>(null);
-  const { t, i18n } = useTranslation();
-  const { enqueueSnackbar } = useSnackbar();
+const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
+  ({ selectedId, onMapViewReady, filter, data }, ref) => {
+    const mapDiv = useRef<HTMLDivElement>(null);
+    const viewRef = useRef<MapView | null>(null);
+    const webMapRef = useRef<WebMap | null>(null);
+    const layerRef = useRef<FeatureLayer | null>(null);
+    const populationLayerRef = useRef<FeatureLayer | null>(null);
+    const sketchLayerRef = useRef<GraphicsLayer | null>(null);
+    const markersLayerRef = useRef<GraphicsLayer | null>(null);
+    const highlightRef = useRef<any>(null);
+    const layerListRef = useRef<LayerList | null>(null);
+    const sketchRef = useRef<Sketch | null>(null);
+    const expandRef = useRef<Expand | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const { t, i18n } = useTranslation();
+    const isMounted = useRef(true);
 
-  const [graphics, setGraphics] = useState<Graphic[]>([]);
-  const [selectedGraphics, setSelectedGraphics] = useState<Graphic[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [newGraphic, setNewGraphic] = useState<Graphic | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const webMap = new WebMap({ basemap: "streets-vector" });
-
-    const view = new MapView({
-      container: mapDiv.current as HTMLDivElement,
-      map: webMap,
-      center: [54.37, 24.47],
-      zoom: 10,
-      ui: { components: ["zoom", "compass", "attribution"] },
-      constraints: { snapToZoom: false },
+    const [isLoading, setIsLoading] = useState(true);
+    const [isMapReady, setIsMapReady] = useState(false);
+    const [layerVisibility] = useState({
+      parcels: true,
+      population: true,
+      markers: true,
     });
+    const [hasZoomed, setHasZoomed] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    onMapViewReady?.(view);
+    const stableT = useCallback((key: string) => t(key), [t]);
 
-    // إضافة طبقة الأراضي
-    const parcelLayer = new FeatureLayer({ url: featureLayerUrl });
-    webMap.add(parcelLayer);
-    layerRef.current = parcelLayer;
-
-    // إضافة طبقة السكان
-    const populationLayer = new FeatureLayer({
-      url: featureLayerUrl,
-      outFields: ["District", "Region", "Total Pop", "Citizen M", "Citizen Fe"],
-      popupTemplate: {
-        title: "{District} - {Region}",
-        content: (feature: any) => {
-          const attributes = feature.graphic.attributes;
-          if (
-            !attributes.District &&
-            !attributes.Region &&
-            !attributes["Total Pop"] &&
-            !attributes["Citizen M"] &&
-            !attributes["Citizen Fe"]
-          ) {
-            return `
-              <div style="font-family: Arial, sans-serif; padding: 15px; background-color: #fff3f3; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
-                <p style="color: #dc3545; font-size: 16px; margin: 0; font-weight: bold;">
-                  ⚠️ لا توجد بيانات متاحة لهذه المنطقة
-                </p>
-              </div>
-            `;
-          }
-          return `
-            <div style="font-family: Arial, sans-serif; padding: 15px; background-color: #f9f9f9; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-              <h3 style="color: #2c3e50; font-size: 18px; margin: 0 0 10px 0; text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
-                ${attributes.District || "غير متاح"} - ${
-            attributes.Region || "غير متاح"
-          }
-              </h3>
-              <ul style="list-style: none; padding: 0; margin: 0;">
-                <li style="font-size: 15px; color: #34495e; margin-bottom: 10px;">
-                  <span style="color: #007bff; font-weight: bold;">👨 الذكور:</span> ${
-                    attributes["Citizen M"] || "غير متاح"
-                  }
-                </li>
-                <li style="font-size: 15px; color: #34495e; margin-bottom: 10px;">
-                  <span style="color: #e83e8c; font-weight: bold;">👩 الإناث:</span> ${
-                    attributes["Citizen Fe"] || "غير متاح"
-                  }
-                </li>
-                <li style="font-size: 15px; color: #34495e;">
-                  <span style="color: #28a745; font-weight: bold;">📊 الإجمالي:</span> ${
-                    attributes["Total Pop"] || "غير متاح"
-                  }
-                </li>
-              </ul>
-            </div>
-          `;
-        },
-      },
-    });
-    webMap.add(populationLayer);
-    populationLayerRef.current = populationLayer;
-
-    // طبقة الرسم
-    const sketchLayer = new GraphicsLayer();
-    webMap.add(sketchLayer);
-    sketchLayerRef.current = sketchLayer;
-
-    viewRef.current = view;
-
-    // الجزئية بتاعة البحث اللي في الخريطة
-    const searchWidget = new Search({
-      view,
-      sources: [
-        {
-          layer: populationLayer, // تخطي فحص TypeScript مؤقتًا
-          searchFields: ["District"],
-          displayField: "District",
-          exactMatch: false,
-          outFields: [
-            "District",
-            "Region",
-            "Total Pop",
-            "Citizen M",
-            "Citizen Fe",
-          ],
-          name: i18n.language === "ar" ? "البحث عن الحي" : "Search District",
-          placeholder:
-            i18n.language === "ar"
-              ? "ابحث عن حي..."
-              : "Search for a district...",
-        } as any,
-      ],
-    });
-    view.ui.add(searchWidget, "top-right");
-
-    // التعامل مع اختيار نتيجة البحث
-    searchWidget.on("select-result", (event) => {
-      if (!event.result || !event.result.feature) return;
-
-      const feature = event.result.feature as Graphic;
-      if (!feature.geometry) return;
-
-      const geometry = feature.geometry as __esri.Polygon;
-      if (!geometry.extent) return;
-
-      // لما تختار عنصر يعمل عليه ZOOM
-      view.goTo(geometry.extent.expand(2));
-
-      // highlight للعنصر اللي اختارناه
-      if (highlightRef.current) {
-        highlightRef.current.remove();
-      }
-      const populationLayer = populationLayerRef.current;
-      if (!populationLayer) return;
-
-      populationLayer
-        .queryObjectIds({
-          where: `District = '${feature.attributes.District}'`,
-        })
-        .then((ids) => {
-          if (ids.length > 0) {
-            view.whenLayerView(populationLayer).then((layerView) => {
-              if ("highlight" in layerView) {
-                const highlight = (
-                  layerView as __esri.FeatureLayerView
-                ).highlight(ids);
-                highlightRef.current = highlight;
-              }
+    const debouncedGoTo = useCallback(
+      debounce((view: MapView, options: any) => {
+        if (isMounted.current && view) {
+          view.when(() => {
+            view.goTo(options).catch((err) => {
+              console.error("Error in debounced goTo:", err);
             });
-          }
-        });
-    });
+          }).catch((err) => {
+            console.warn("View not ready yet:", err);
+          });
+        }
+      }, 300),
+      []
+    );
 
-    view.when(() => {
-      setIsLoading(false);
-    });
+    const memoizedData = useMemo(() => data, [data]);
+    const lastFilteredData = useRef<PopulationData[]>([]);
 
-    const sketchVM = initializeSketchVM({
-      view,
-      sketchLayer,
-      t,
-      setGraphics,
-      setSelectedGraphics,
-      onCreateGraphic: (graphic: Graphic) => {
-        setNewGraphic(graphic);
-        setName("");
-        setDescription("");
-        setDialogOpen(true);
-      },
-    });
-    sketchVMRef.current = sketchVM;
+    useImperativeHandle(ref, () => ({
+      updateFilter: (region: string | null) => {
+        if (!viewRef.current || !isMounted.current) return;
 
-    const savedGraphics = loadGraphicsFromLocalStorage();
-    if (savedGraphics.length > 0) {
-      sketchLayer.addMany(savedGraphics);
-      setGraphics(savedGraphics);
-    }
+        const filteredData = region
+          ? memoizedData.filter((item) => item.region === region)
+          : memoizedData;
 
-    const clickHandler = view.on("click", async (event) => {
-      const screenPoint = {
-        x: event.x,
-        y: event.y,
-      };
-      const hit = await view.hitTest(screenPoint);
-      const sketchLayer = sketchLayerRef.current;
-      if (!sketchLayer) return;
-
-      const userDrawingHit = hit.results.find(
-        (result) => "graphic" in result && result.graphic.layer === sketchLayer
-      );
-
-      if (userDrawingHit && "graphic" in userDrawingHit) {
-        const clickedGraphic = userDrawingHit.graphic;
-        const clickedUID = clickedGraphic.attributes?.uid;
-
-        const isSelected = selectedGraphics.some(
-          (g) => g.attributes?.uid === clickedUID
-        );
-
-        let newSelected: Graphic[];
-        if (isSelected) {
-          newSelected = selectedGraphics.filter(
-            (g) => g.attributes?.uid !== clickedUID
-          );
-          clickedGraphic.symbol = {
-            type: "simple-fill",
-            color: [227, 139, 79, 0.8],
-            outline: { color: [255, 255, 255], width: 1 },
-          };
-        } else {
-          newSelected = [...selectedGraphics, clickedGraphic];
-          clickedGraphic.symbol = {
-            type: "simple-fill",
-            color: [255, 255, 0, 0.6],
-            outline: { color: [255, 255, 255], width: 1 },
-          };
+        if (filteredData.length === 0) {
+          debouncedGoTo(viewRef.current, {
+            center: [54.37, 24.47],
+            zoom: 10,
+          });
+          return;
         }
 
-        setSelectedGraphics(newSelected);
+        const markersLayer = markersLayerRef.current || new GraphicsLayer({ id: "markers-layer" });
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+        const graphics: Graphic[] = [];
+
+        filteredData.forEach((item) => {
+          try {
+            const [lon, lat] = item.coordinates
+              .trim()
+              .split(/[, -]+/)
+              .map((coord) => parseFloat(coord));
+
+            if (isNaN(lat) || isNaN(lon)) {
+              console.warn("Invalid coordinates for item:", item);
+              return;
+            }
+
+            minLat = Math.min(minLat, lat);
+            maxLat = Math.max(maxLat, lat);
+            minLon = Math.min(minLon, lon);
+            maxLon = Math.max(maxLon, lon);
+
+            const point = new Point({
+              longitude: lon,
+              latitude: lat,
+            });
+
+            const marker = new SimpleMarkerSymbol({
+              color: [226, 119, 40],
+              outline: {
+                color: [255, 255, 255],
+                width: 1,
+              },
+            });
+
+            const graphic = new Graphic({
+              geometry: point,
+              symbol: marker,
+              attributes: {
+                id: item.id,
+                location: item.location,
+                region: item.region,
+                users: item.users,
+                status: item.status,
+                lastUpdated: item.lastUpdated,
+              },
+            });
+
+            graphics.push(graphic);
+          } catch (error) {
+            console.error("Error parsing coordinates:", item.coordinates, error);
+          }
+        });
+
+        // console.log("Calculated bounds:", { minLat, maxLat, minLon, maxLon });
+
+        if (graphics.length > 0 && viewRef.current) {
+          if (markersLayerRef.current) {
+            markersLayerRef.current.removeAll();
+            markersLayerRef.current.addMany(graphics);
+          } else {
+            markersLayer.addMany(graphics);
+            viewRef.current.map.add(markersLayer);
+            markersLayerRef.current = markersLayer;
+          }
+
+          const centerLat = (minLat + maxLat) / 2;
+          const centerLon = (minLon + maxLon) / 2;
+
+          const latDiff = maxLat - minLat;
+          const lonDiff = maxLon - minLon;
+          const maxDiff = Math.max(latDiff, lonDiff);
+          let zoomLevel = 10;
+          if (maxDiff > 0.5) zoomLevel = 8;
+          else if (maxDiff > 0.1) zoomLevel = 9;
+          else if (maxDiff > 0.01) zoomLevel = 11;
+
+          console.log("Zooming to:", {
+            center: [centerLon, centerLat],
+            zoom: zoomLevel,
+          });
+
+          debouncedGoTo(viewRef.current, {
+            center: [centerLon, centerLat],
+            zoom: zoomLevel,
+          });
+
+          setHasZoomed(true);
+        }
+      },
+    }));
+
+    const checkLayerUrl = async (url: string): Promise<boolean> => {
+      if (!isMounted.current) return false;
+      try {
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(`${url}?f=json`, {
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return true;
+      } catch (err: any) {
+        if (err.name === "AbortError") {
+          console.warn("URL check aborted:", err.message);
+        } else {
+          console.error("Error checking layer URL:", err);
+        }
+        return false;
+      }
+    };
+
+    useEffect(() => {
+      isMounted.current = true;
+
+      const initializeMap = async () => {
+        const isUrlValid = await checkLayerUrl(featureLayerUrl);
+        if (!isMounted.current) return;
+
+        if (!isUrlValid) {
+          setError("فشل تحميل الخريطة: رابط الطبقة غير صالح أو غير متاح");
+          setIsLoading(false);
+          return;
+        }
+
+        if (!webMapRef.current) {
+          webMapRef.current = new WebMap({ basemap: "streets-vector" });
+
+          viewRef.current = new MapView({
+            container: mapDiv.current as HTMLDivElement,
+            map: webMapRef.current,
+            center: [54.37, 24.47],
+            zoom: 10,
+            ui: { components: ["zoom", "attribution"] },
+            constraints: { snapToZoom: false },
+          });
+
+          onMapViewReady?.(viewRef.current);
+
+          const parcelLayer = new FeatureLayer({ url: featureLayerUrl });
+          webMapRef.current.add(parcelLayer);
+          layerRef.current = parcelLayer;
+
+          const populationLayer = new FeatureLayer({
+            url: featureLayerUrl,
+            outFields: ["*"],
+          });
+          webMapRef.current.add(populationLayer);
+          populationLayerRef.current = populationLayer;
+
+          const sketchLayer = new GraphicsLayer({ id: "sketch-layer" });
+          webMapRef.current.add(sketchLayer);
+          sketchLayerRef.current = sketchLayer;
+
+          parcelLayer.visible = layerVisibility.parcels;
+          populationLayer.visible = layerVisibility.population;
+
+          const layerList = new LayerList({
+            view: viewRef.current,
+            listItemCreatedFunction: (event) => {
+              const item = event.item;
+              if (item.layer === parcelLayer) item.title = "Parcels Layer";
+              else if (item.layer === populationLayer) item.title = "Population Layer";
+              else if (item.layer === sketchLayerRef.current) item.title = "Sketch Layer";
+              else if (item.layer === markersLayerRef.current) {
+                item.title = "Markers Layer";
+                item.actionsSections = [
+                  [
+                    {
+                      title: "Toggle Visibility",
+                      className: "esri-icon-visible",
+                      id: "toggle-visibility",
+                    },
+                  ],
+                ];
+              }
+              item.panel = {
+                content: "legend",
+                open: true,
+              };
+            },
+          });
+
+          layerList.on("trigger-action", (event) => {
+            const id = event.action.id;
+            if (id === "toggle-visibility" && markersLayerRef.current) {
+              markersLayerRef.current.visible = !markersLayerRef.current.visible;
+              viewRef.current?.map.reorder(markersLayerRef.current, viewRef.current.map.layers.length - 1);
+            }
+          });
+
+          const expand = new Expand({
+            content: layerList,
+            view: viewRef.current,
+            expandIcon: "layers",
+            expanded: false,
+            group: "top-right",
+          });
+          viewRef.current.ui.add(expand, "top-right");
+          expandRef.current = expand;
+          layerListRef.current = layerList;
+
+          const sketch = new Sketch({
+            view: viewRef.current,
+            layer: sketchLayer,
+            creationMode: "update",
+            defaultUpdateOptions: { tool: "reshape" },
+            visibleElements: {
+              createTools: {
+                point: false,
+                polyline: false,
+                polygon: false,
+                rectangle: false,
+                circle: true,
+              },
+            },
+            container: "sketch-container",
+          });
+          sketchRef.current = sketch;
+
+          viewRef.current.on("click", async (event) => {
+            const parcelLayer = layerRef.current;
+            if (!parcelLayer || !viewRef.current || !isMounted.current) return;
+
+            const query = parcelLayer.createQuery();
+            query.geometry = event.mapPoint;
+            query.distance = 5;
+            query.units = "meters";
+            query.spatialRelationship = "intersects";
+            query.returnGeometry = true;
+            query.outFields = ["*"];
+
+            try {
+              const { features } = await parcelLayer.queryFeatures(query);
+              if (features.length > 0 && viewRef.current && isMounted.current) {
+                const feature = features[0];
+                debouncedGoTo(viewRef.current, {
+                  target: feature.geometry,
+                  scale: 150000,
+                });
+              }
+            } catch (err) {
+              console.error("Error querying features:", err);
+            }
+          });
+
+          try {
+            await Promise.all([
+              viewRef.current.when(),
+              parcelLayer.when(),
+              populationLayer.when(),
+            ]);
+            if (isMounted.current) {
+              setIsMapReady(true);
+              setIsLoading(false);
+              console.log("Map and layers are ready");
+            }
+          } catch (error: any) {
+            if (error.name === "AbortError") {
+              console.warn("Map loading aborted");
+            } else {
+              console.error("Error initializing map or layers:", error);
+              setError("فشل تحميل الخريطة: حاول مرة أخرى");
+            }
+            if (isMounted.current) {
+              setIsMapReady(true);
+              setIsLoading(false);
+            }
+          }
+        }
+      };
+
+      initializeMap();
+
+      return () => {
+        isMounted.current = false;
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+        if (viewRef.current) {
+          viewRef.current.destroy();
+          viewRef.current = null;
+          webMapRef.current = null;
+        }
+        if (highlightRef.current) highlightRef.current.remove();
+        if (layerListRef.current) layerListRef.current.destroy();
+        if (sketchRef.current) sketchRef.current.destroy();
+        if (expandRef.current) expandRef.current.destroy();
+      };
+    }, []);
+
+    useEffect(() => {
+      if (
+        !viewRef.current ||
+        !viewRef.current.map ||
+        !isMapReady ||
+        !memoizedData ||
+        memoizedData.length === 0 ||
+        !isMounted.current
+      ) {
         return;
       }
 
-      const parcelLayer = layerRef.current;
-      if (!parcelLayer) return;
+      const view = viewRef.current;
 
-      const query = parcelLayer.createQuery();
-      query.geometry = event.mapPoint;
-      query.distance = 5;
-      query.units = "meters";
-      query.spatialRelationship = "intersects";
-      query.returnGeometry = true;
-      query.outFields = ["*"];
+      const filteredData = filter
+        ? memoizedData.filter((item) => item.region === filter)
+        : memoizedData;
 
-      const { features } = await parcelLayer.queryFeatures(query);
+      if (
+        JSON.stringify(filteredData) === JSON.stringify(lastFilteredData.current)
+      ) {
+        return;
+      }
 
-      if (features.length > 0) {
-        const feature = features[0];
-        const objectId =
-          feature.attributes.objectid || feature.attributes.OBJECTID;
-        onSelectFromMap(objectId);
+      lastFilteredData.current = filteredData;
 
-        const highlight = new Graphic({
-          geometry: feature.geometry,
-          symbol: {
-            type: "simple-fill",
-            color: [0, 120, 255, 0.3],
-            outline: { color: [0, 120, 255], width: 3 },
-          },
+      if (filteredData.length === 0) {
+        debouncedGoTo(view, {
+          center: [54.37, 24.47],
+          zoom: 10,
         });
-
-        view.graphics.removeAll();
-        view.graphics.add(highlight);
+        return;
       }
-    });
 
-    return () => {
-      clickHandler.remove();
-      sketchVM.destroy();
-      view.destroy();
-      viewRef.current = null;
-      if (highlightRef.current) {
-        highlightRef.current.remove();
-      }
-    };
-  }, [onMapViewReady, onSelectFromMap, t, i18n.language]);
+      let minLat = Infinity;
+      let maxLat = -Infinity;
+      let minLon = Infinity;
+      let maxLon = -Infinity;
 
-  useEffect(() => {
-    if (!viewRef.current || !layerRef.current) return;
+      const graphics: Graphic[] = [];
 
-    if (selectedId === null) {
-      viewRef.current.graphics.removeAll();
-      return;
-    }
+      filteredData.forEach((item) => {
+        try {
+          const [lon, lat] = item.coordinates
+            .trim()
+            .split(/[, -]+/)
+            .map((coord) => parseFloat(coord));
 
-    const query = new Query({
-      where: `objectid = ${selectedId}`,
-      returnGeometry: true,
-      outFields: ["*"],
-    });
+          if (isNaN(lat) || isNaN(lon)) {
+            console.warn("Invalid coordinates for item:", item);
+            return;
+          }
 
-    layerRef.current.queryFeatures(query).then((result) => {
-      if (result.features.length > 0) {
-        const feature = result.features[0];
-        viewRef.current?.goTo({ target: feature.geometry, scale: 90000 });
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+          minLon = Math.min(minLon, lon);
+          maxLon = Math.max(maxLon, lon);
 
-        const graphic = new Graphic({
-          geometry: feature.geometry,
-          symbol: {
-            type: "simple-fill",
-            color: [255, 0, 0, 0.3],
-            outline: { color: [255, 0, 0], width: 3 },
-          },
-        });
+          const point = new Point({
+            longitude: lon,
+            latitude: lat,
+          });
 
-        viewRef.current?.graphics.removeAll();
-        viewRef.current?.graphics.add(graphic);
-      }
-    });
-  }, [selectedId]);
+          const marker = new SimpleMarkerSymbol({
+            color: [226, 119, 40],
+            outline: {
+              color: [255, 255, 255],
+              width: 1,
+            },
+          });
 
-  const handleSave = () => {
-    if (!newGraphic) return;
-    if (!name.trim() || !description.trim()) {
-      notify(t("incompleteDrawingData") || "يجب إدخال اسم ووصف للرسم!", {
-        variant: "warning",
+          const graphic = new Graphic({
+            geometry: point,
+            symbol: marker,
+            attributes: {
+              id: item.id,
+              location: item.location,
+              region: item.region,
+              users: item.users,
+              status: item.status,
+              lastUpdated: item.lastUpdated,
+            },
+          });
+
+          graphics.push(graphic);
+        } catch (error) {
+          console.error("Error parsing coordinates:", item.coordinates, error);
+        }
       });
-      return;
-    }
 
-    newGraphic.attributes = {
-      name: name.trim(),
-      description: description.trim(),
-      createdAt: new Date().toLocaleString(),
-      uid: crypto.randomUUID(),
+      console.log("Calculated bounds:", { minLat, maxLat, minLon, maxLon });
+
+      if (graphics.length > 0 && markersLayerRef.current) {
+        markersLayerRef.current.removeAll();
+        markersLayerRef.current.addMany(graphics);
+        markersLayerRef.current.visible = layerVisibility.markers;
+
+        const centerLat = (minLat + maxLat) / 2;
+        const centerLon = (minLon + maxLon) / 2;
+
+        const latDiff = maxLat - minLat;
+        const lonDiff = maxLon - minLon;
+        const maxDiff = Math.max(latDiff, lonDiff);
+        let zoomLevel = 10;
+        if (maxDiff > 0.5) zoomLevel = 8;
+        else if (maxDiff > 0.1) zoomLevel = 9;
+        else if (maxDiff > 0.01) zoomLevel = 11;
+
+        console.log("Zooming to:", {
+          center: [centerLon, centerLat],
+          zoom: zoomLevel,
+        });
+
+        debouncedGoTo(view, {
+          center: [centerLon, centerLat],
+          zoom: zoomLevel,
+        });
+
+        setHasZoomed(true);
+      }
+
+      return () => {
+        if (viewRef.current && viewRef.current.map) {
+          if (markersLayerRef.current) {
+            viewRef.current.map.remove(markersLayerRef.current);
+          }
+        }
+      };
+    }, [filter, memoizedData, isMapReady, stableT, debouncedGoTo, hasZoomed]);
+
+    useEffect(() => {
+      if (!viewRef.current || !layerRef.current || !isMounted.current) return;
+
+      if (selectedId === null) {
+        if (viewRef.current) {
+          viewRef.current.graphics.removeAll();
+        }
+        return;
+      }
+
+      const query = new Query({
+        where: `OBJECTID = ${selectedId}`,
+        returnGeometry: true,
+        outFields: ["*"],
+      });
+
+      layerRef.current
+        .queryFeatures(query)
+        .then((result) => {
+          if (
+            result.features.length > 0 &&
+            isMounted.current &&
+            viewRef.current
+          ) {
+            const feature = result.features[0];
+            debouncedGoTo(viewRef.current, {
+              target: feature.geometry,
+              scale: 150000,
+            });
+          }
+        })
+        .catch((err) => {
+          console.error("Error querying selected feature:", err);
+        });
+    }, [selectedId, debouncedGoTo]);
+
+    useEffect(() => {
+      const parcelLayer = layerRef.current;
+      const populationLayer = populationLayerRef.current;
+      const markersLayer = markersLayerRef.current;
+      if (parcelLayer) parcelLayer.visible = layerVisibility.parcels;
+      if (populationLayer) populationLayer.visible = layerVisibility.population;
+      if (markersLayer) markersLayer.visible = layerVisibility.markers;
+    }, [layerVisibility]);
+
+    const handleToggleFullscreen = () => {
+      const view = viewRef.current;
+      if (view && view.container) {
+        if (!document.fullscreenElement) view.container.requestFullscreen();
+        else document.exitFullscreen();
+      }
     };
 
-    newGraphic.symbol = {
-      type: "simple-fill",
-      color: [227, 139, 79, 0.8],
-      outline: { color: [255, 255, 255], width: 1 },
-    };
-
-    sketchLayerRef.current?.add(newGraphic);
-
-    setGraphics((prev) => {
-      const updated = [...prev, newGraphic];
-      saveGraphicsToLocalStorage(updated);
-      return updated;
-    });
-
-    setDialogOpen(false);
-    notify(t("savedSuccessfully") || "تم الحفظ بنجاح", {
-      variant: "success",
-    });
-  };
-
-  const handleExportExcel = () => {
-    exportToExcel({ graphics, t, enqueueSnackbar });
-  };
-
-  const handleExportPDF = () => {
-    exportToPDF(graphics, t, viewRef, enqueueSnackbar);
-  };
-
-  // Responsive styles
-  const responsiveStyles = {
-    container: {
-      display: "flex",
-      flexDirection: "column",
-      gap: { xs: 2, sm: 2.5 },
-      width: "100%",
-      maxWidth: "100vw",
-      overflowX: "hidden",
-      px: { xs: 0.5, sm: 1 },
-    },
-    mapDiv: {
-      height: { xs: "35vh", sm: "calc(100vh - 120px)" },
-      width: "100%",
-      maxWidth: "100vw",
-      position: "relative",
-    },
-    buttonContainer: {
-      display: "flex",
-      flexDirection: { xs: "column", sm: "row" },
-      flexWrap: "wrap",
-      gap: { xs: 2, sm: 2.5 },
-      justifyContent: { xs: "center", sm: "flex-start" },
-      px: { xs: 0.5, sm: 1 },
-      py: { xs: 2, sm: 2.5 },
-      mb: { xs: 2.5, sm: 2 },
-    },
-    button: (bgColor: string) => ({
-      backgroundColor: bgColor,
-      color: "white",
-      border: "none",
-      borderRadius: 4,
-      padding: { xs: "6px 8px", sm: "8px 12px" },
-      margin: { xs: "4px 0", sm: "4px" },
-      cursor: "pointer",
-      fontSize: { xs: "0.75rem", sm: "0.85rem", md: "0.9rem" },
-      width: { xs: "100%", sm: "auto" },
-      minWidth: { xs: "100%", sm: "80px" },
-    }),
-    dialog: {
-      "& .MuiDialog-paper": {
-        p: { xs: 1, sm: 2 },
-        maxWidth: { xs: "90vw", sm: "500px" },
+    const responsiveStyles = {
+      container: {
+        backgroundColor: "#fdfdfd",
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        width: "100%",
+        maxWidth: "100vw",
+        minWidth: 0,
+        height: "100%",
+        border: "1px solid #e0e0e0",
+        borderRadius: 4,
+        margin: 0,
+        padding: 0,
       },
-    },
-    textField: {
-      fontSize: { xs: "0.75rem", sm: "0.85rem", md: "0.9rem" },
-    },
-  };
+      mapHeader: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        backgroundColor: "#fff",
+        p: 1,
+        borderBottom: "none",
+      },
+      mapTitle: {
+        fontSize: { xs: "1rem", sm: "1.2rem" },
+        fontWeight: "bold",
+        color: "#2c3e50",
+      },
+      mapDiv: {
+        height: { xs: "100%", sm: "100%" },
+        width: "100%",
+        maxWidth: "100%",
+        position: "relative",
+        minHeight: "300px",
+        mt: 0,
+      },
+      buttonContainer: {
+        display: "flex",
+        alignItems: "center",
+        gap: 2,
+      },
+      button: {
+        backgroundColor: "#f5f5f5",
+        color: "#000",
+        border: "1px solid #f5f5f5",
+        borderRadius: 3,
+        padding: "4px 12px",
+        cursor: "pointer",
+        fontSize: "0.875rem",
+        fontWeight: 600,
+        textTransform: "none",
+        display: "flex",
+        alignItems: "center",
+        "&:hover": {
+          backgroundColor: "#bcc7ce",
+          border: "1px solid #bcc7ce",
+        },
+      },
+    };
 
-  return (
-    <Box sx={responsiveStyles.container}>
-      <Box sx={responsiveStyles.mapDiv} ref={mapDiv}>
-        <Backdrop
-          open={isLoading}
-          sx={{
-            color: "#fff",
-            zIndex: (theme) => theme.zIndex.drawer + 1,
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-          }}
-        >
-          <CircularProgress color="inherit" />
-        </Backdrop>
-      </Box>
-
-      {/* إضافة الجدول تحت الخريطة */}
-      <ParcelDataGrid
-      // view={viewRef.current}
-      // layer={populationLayerRef.current}
-      />
-
-      <SearchDrawingsPanel
-        graphics={graphics}
-        view={viewRef.current}
-        onSelectGraphic={(graphic) => setSelectedGraphics([graphic])}
-      />
-
-      <Box sx={responsiveStyles.buttonContainer}>
-        <Button
-          sx={responsiveStyles.button("#4CAF50")}
-          onClick={() => sketchVMRef.current?.create("polygon")}
-        >
-          {i18n.language === "en" ? "Draw Polygon" : "ارسم مضلع"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#2196F3")}
-          onClick={() => sketchVMRef.current?.create("polyline")}
-        >
-          {i18n.language === "en" ? "Draw Polyline" : "ارسم خط"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#f44336")}
-          onClick={() => {
-            if (selectedGraphics.length === 0) {
-              notify(
-                i18n.language === "en"
-                  ? "🚫 Please select drawings to delete"
-                  : "🚫 اختر رسومات للحذف",
-                { variant: "warning" }
-              );
-              return;
-            }
-
-            const sketchLayer = sketchLayerRef.current;
-            if (!sketchLayer) return;
-
-            selectedGraphics.forEach((g) => {
-              sketchLayer.remove(g);
-            });
-
-            setGraphics((prevGraphics) => {
-              const updated = prevGraphics.filter(
-                (g) =>
-                  !selectedGraphics.some(
-                    (sel) => sel.attributes?.uid === g.attributes?.uid
-                  )
-              );
-              saveGraphicsToLocalStorage(updated);
-              return updated;
-            });
-
-            setSelectedGraphics([]);
-            notify(
-              i18n.language === "en"
-                ? "✅ Selected drawings deleted successfully"
-                : "✅ تم حذف الرسومات المحددة بنجاح",
-              { variant: "success" }
-            );
-          }}
-        >
-          {i18n.language === "en" ? "Delete Selected" : "احذف المحدد"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#607d8b")}
-          onClick={() => {
-            const allGraphics =
-              sketchLayerRef.current?.graphics.toArray() || [];
-            if (allGraphics.length === 0) {
-              notify(
-                i18n.language === "en"
-                  ? "🚫 No graphics to delete"
-                  : "🚫 لا يوجد رسومات للحذف",
-                { variant: "warning" }
-              );
-              return;
-            }
-            setConfirmOpen(true);
-          }}
-        >
-          {i18n.language === "en" ? "Clear All" : "احذف الكل"}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#FF9800")}
-          onClick={handleExportExcel}
-        >
-          {t("exportExcel")}
-        </Button>
-        <Button
-          sx={responsiveStyles.button("#673AB7")}
-          onClick={handleExportPDF}
-        >
-          {t("exportPDF")}
-        </Button>
-      </Box>
-
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        fullWidth
-        maxWidth="sm"
-        sx={responsiveStyles.dialog}
-      >
-        <DialogTitle>{t("enterDrawingData")}</DialogTitle>
-        <DialogContent>
-          <TextField
-            label={t("name")}
-            fullWidth
-            margin="dense"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-            sx={responsiveStyles.textField}
-          />
-          <TextField
-            label={t("description")}
-            fullWidth
-            margin="dense"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            multiline
-            rows={3}
-            sx={responsiveStyles.textField}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t("cancel")}</Button>
-          <Button onClick={handleSave} variant="contained" color="primary">
-            {t("save")}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        fullWidth
-        maxWidth="sm"
-        sx={responsiveStyles.dialog}
-      >
-        <DialogTitle>{t("confirmDelete")}</DialogTitle>
-        <DialogContent>
-          {t("confirmDeleteMsg", { count: selectedGraphics.length })}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)}>{t("cancel")}</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => {
-              selectedGraphics.forEach((graphic) => {
-                sketchLayerRef.current?.remove(graphic);
-              });
-
-              const updated = graphics.filter(
-                (g) =>
-                  !selectedGraphics.some(
-                    (sg) => sg.attributes?.uid === g.attributes?.uid
-                  )
-              );
-
-              setGraphics(updated);
-              saveGraphicsToLocalStorage(updated);
-              setSelectedGraphics([]);
-              setConfirmOpen(false);
-              sketchLayerRef.current?.removeAll();
-              setGraphics([]);
-              setSelectedGraphics([]);
-              localStorage.removeItem("user_drawings");
-              notify(
-                i18n.language === "en"
-                  ? "✅ Drawings deleted successfully"
-                  : "✅ تم حذف الرسومات بنجاح",
-                { variant: "success" }
-              );
+    return (
+      <Box sx={responsiveStyles.container}>
+        <Box sx={responsiveStyles.mapHeader}>
+          <Typography sx={responsiveStyles.mapTitle}>
+            {i18n.language === "en" ? "Interactive Map" : "خريطة الأراضي"}
+          </Typography>
+          <Box sx={responsiveStyles.buttonContainer}>
+            <Button
+              sx={responsiveStyles.button}
+              onClick={handleToggleFullscreen}
+              startIcon={<span style={{ fontSize: "1rem" }}>⟐</span>}
+            >
+              {i18n.language === "en" ? "Fullscreen" : "ملء الشاشة"}
+            </Button>
+            <Button
+              sx={responsiveStyles.button}
+              onClick={() => expandRef.current?.expand()}
+              startIcon={<span style={{ fontSize: "1rem" }}>⋮⋮</span>}
+            >
+              {i18n.language === "en" ? "Layers" : "الطبقات"}
+            </Button>
+          </Box>
+        </Box>
+        <Box sx={responsiveStyles.mapDiv} ref={mapDiv}>
+          <div id="sketch-container" style={{ display: "none" }}></div>
+          <Backdrop
+            open={isLoading}
+            sx={{
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
+              zIndex: (theme) => theme.zIndex.drawer + 1,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
             }}
           >
-            {t("delete")}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
-  );
-}
+            <CircularProgress color="inherit" size={40} thickness={4} />
+            <Typography
+              variant="h6"
+              sx={{
+                color: "#fff",
+                mt: 2,
+                fontSize: { xs: "1rem", sm: "1.2rem" },
+                textAlign: "center",
+              }}
+            >
+              {error ||
+                (i18n.language === "en"
+                  ? "Loading Map..."
+                  : "جارٍ تحميل الخريطة...")}
+            </Typography>
+          </Backdrop>
+        </Box>
+      </Box>
+    );
+  }
+);
+
+export default ParcelMap;
