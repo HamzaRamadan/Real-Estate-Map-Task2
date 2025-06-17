@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import MapView from "@arcgis/core/views/MapView";
 import WebMap from "@arcgis/core/WebMap";
 import Graphic from "@arcgis/core/Graphic";
@@ -12,13 +20,14 @@ import {
   Button,
   Backdrop,
   CircularProgress,
+  Menu,
+  MenuItem,
 } from "@mui/material";
-import Expand from "@arcgis/core/widgets/Expand";
-import LayerList from "@arcgis/core/widgets/LayerList";
-import Sketch from "@arcgis/core/widgets/Sketch";
+import SketchViewModel from "@arcgis/core/widgets/Sketch/SketchViewModel";
 import Point from "@arcgis/core/geometry/Point";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol";
 import debounce from "lodash/debounce";
+import { useParcelStore } from "../store/parcelStore";
 
 interface PopulationData {
   id: number;
@@ -56,35 +65,39 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
     const sketchLayerRef = useRef<GraphicsLayer | null>(null);
     const markersLayerRef = useRef<GraphicsLayer | null>(null);
     const highlightRef = useRef<any>(null);
-    const layerListRef = useRef<LayerList | null>(null);
-    const sketchRef = useRef<Sketch | null>(null);
-    const expandRef = useRef<Expand | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const { t, i18n } = useTranslation();
     const isMounted = useRef(true);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMapReady, setIsMapReady] = useState(false);
-    const [layerVisibility] = useState({
+    const [layerVisibility, setLayerVisibility] = useState({
       parcels: true,
       population: true,
       markers: true,
     });
     const [hasZoomed, setHasZoomed] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [sketchVM, setSketchVM] = useState<SketchViewModel | null>(null);
+    const [selectedGraphic, setSelectedGraphic] = useState<Graphic | null>(
+      null
+    );
 
     const stableT = useCallback((key: string) => t(key), [t]);
 
     const debouncedGoTo = useCallback(
       debounce((view: MapView, options: any) => {
         if (isMounted.current && view) {
-          view.when(() => {
-            view.goTo(options).catch((err) => {
-              console.error("Error in debounced goTo:", err);
+          view
+            .when(() => {
+              view.goTo(options).catch((err) => {
+                console.error("Error in debounced goTo:", err);
+              });
+            })
+            .catch((err) => {
+              console.warn("View not ready yet:", err);
             });
-          }).catch((err) => {
-            console.warn("View not ready yet:", err);
-          });
         }
       }, 300),
       []
@@ -92,6 +105,34 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
     const memoizedData = useMemo(() => data, [data]);
     const lastFilteredData = useRef<PopulationData[]>([]);
+
+    const defaultMarkerSymbol = useMemo(
+      () =>
+        new SimpleMarkerSymbol({
+          color: [226, 119, 40],
+          outline: {
+            color: [255, 255, 255],
+            width: 1,
+          },
+          size: "8px",
+        }),
+      []
+    );
+
+    const highlightedMarkerSymbol = useMemo(
+      () =>
+        new SimpleMarkerSymbol({
+          color: [255, 193, 7],
+          outline: {
+            color: [255, 255, 255],
+            width: 2,
+          },
+          size: "12px",
+          style: "circle",
+          // effect: "bloom(1.5, 0.5px, 0.2)",
+        }),
+      []
+    );
 
     useImperativeHandle(ref, () => ({
       updateFilter: (region: string | null) => {
@@ -109,7 +150,8 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           return;
         }
 
-        const markersLayer = markersLayerRef.current || new GraphicsLayer({ id: "markers-layer" });
+        const markersLayer =
+          markersLayerRef.current || new GraphicsLayer({ id: "markers-layer" });
         let minLat = Infinity;
         let maxLat = -Infinity;
         let minLon = Infinity;
@@ -138,13 +180,9 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
               latitude: lat,
             });
 
-            const marker = new SimpleMarkerSymbol({
-              color: [226, 119, 40],
-              outline: {
-                color: [255, 255, 255],
-                width: 1,
-              },
-            });
+            const marker = region
+              ? highlightedMarkerSymbol
+              : defaultMarkerSymbol;
 
             const graphic = new Graphic({
               geometry: point,
@@ -161,11 +199,13 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
             graphics.push(graphic);
           } catch (error) {
-            console.error("Error parsing coordinates:", item.coordinates, error);
+            console.error(
+              "Error parsing coordinates:",
+              item.coordinates,
+              error
+            );
           }
         });
-
-        // console.log("Calculated bounds:", { minLat, maxLat, minLon, maxLon });
 
         if (graphics.length > 0 && viewRef.current) {
           if (markersLayerRef.current) {
@@ -179,7 +219,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
           const centerLat = (minLat + maxLat) / 2;
           const centerLon = (minLon + maxLon) / 2;
-
           const latDiff = maxLat - minLat;
           const lonDiff = maxLon - minLon;
           const maxDiff = Math.max(latDiff, lonDiff);
@@ -187,11 +226,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           if (maxDiff > 0.5) zoomLevel = 8;
           else if (maxDiff > 0.1) zoomLevel = 9;
           else if (maxDiff > 0.01) zoomLevel = 11;
-
-          console.log("Zooming to:", {
-            center: [centerLon, centerLat],
-            zoom: zoomLevel,
-          });
 
           debouncedGoTo(viewRef.current, {
             center: [centerLon, centerLat],
@@ -208,28 +242,44 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
       try {
         const controller = new AbortController();
         abortControllerRef.current = controller;
-
         const timeoutId = setTimeout(() => controller.abort(), 10000);
-
         const response = await fetch(`${url}?f=json`, {
           signal: controller.signal,
         });
-
         clearTimeout(timeoutId);
-
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error(`HTTP error! status: ${response.status}`);
-        }
         return true;
       } catch (err: any) {
-        if (err.name === "AbortError") {
+        if (err.name === "AbortError")
           console.warn("URL check aborted:", err.message);
-        } else {
-          console.error("Error checking layer URL:", err);
-        }
+        else console.error("Error checking layer URL:", err);
         return false;
       }
     };
+
+    const loadSavedParcels = useCallback(() => {
+      const savedParcels = useParcelStore.getState().parcels;
+      savedParcels.forEach((parcel) => {
+        try {
+          const graphic = Graphic.fromJSON({
+            geometry: parcel.geometry,
+            attributes: parcel.attributes,
+          });
+          sketchLayerRef.current?.add(graphic);
+        } catch (error) {
+          console.error("Failed to load graphic:", error);
+        }
+      });
+    }, []);
+
+    const deleteSelectedGraphic = useCallback(() => {
+      if (selectedGraphic && sketchLayerRef.current) {
+        sketchLayerRef.current.remove(selectedGraphic);
+        useParcelStore.getState().removeParcel(selectedGraphic.attributes.id);
+        setSelectedGraphic(null);
+      }
+    }, [selectedGraphic]);
 
     useEffect(() => {
       isMounted.current = true;
@@ -246,7 +296,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
         if (!webMapRef.current) {
           webMapRef.current = new WebMap({ basemap: "streets-vector" });
-
           viewRef.current = new MapView({
             container: mapDiv.current as HTMLDivElement,
             map: webMapRef.current,
@@ -276,73 +325,73 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           parcelLayer.visible = layerVisibility.parcels;
           populationLayer.visible = layerVisibility.population;
 
-          const layerList = new LayerList({
-            view: viewRef.current,
-            listItemCreatedFunction: (event) => {
-              const item = event.item;
-              if (item.layer === parcelLayer) item.title = "Parcels Layer";
-              else if (item.layer === populationLayer) item.title = "Population Layer";
-              else if (item.layer === sketchLayerRef.current) item.title = "Sketch Layer";
-              else if (item.layer === markersLayerRef.current) {
-                item.title = "Markers Layer";
-                item.actionsSections = [
-                  [
-                    {
-                      title: "Toggle Visibility",
-                      className: "esri-icon-visible",
-                      id: "toggle-visibility",
-                    },
-                  ],
-                ];
-              }
-              item.panel = {
-                content: "legend",
-                open: true,
-              };
-            },
-          });
-
-          layerList.on("trigger-action", (event) => {
-            const id = event.action.id;
-            if (id === "toggle-visibility" && markersLayerRef.current) {
-              markersLayerRef.current.visible = !markersLayerRef.current.visible;
-              viewRef.current?.map.reorder(markersLayerRef.current, viewRef.current.map.layers.length - 1);
-            }
-          });
-
-          const expand = new Expand({
-            content: layerList,
-            view: viewRef.current,
-            expandIcon: "layers",
-            expanded: false,
-            group: "top-right",
-          });
-          viewRef.current.ui.add(expand, "top-right");
-          expandRef.current = expand;
-          layerListRef.current = layerList;
-
-          const sketch = new Sketch({
+          // Initialize SketchViewModel
+          const sketchVM = new SketchViewModel({
             view: viewRef.current,
             layer: sketchLayer,
-            creationMode: "update",
-            defaultUpdateOptions: { tool: "reshape" },
-            visibleElements: {
-              createTools: {
-                point: false,
-                polyline: false,
-                polygon: false,
-                rectangle: false,
-                circle: true,
+            defaultCreateOptions: { mode: "click" },
+            defaultUpdateOptions: {
+              tool: "reshape",
+              enableRotation: true,
+              enableScaling: true,
+            },
+            polygonSymbol: {
+              type: "simple-fill",
+              color: [227, 139, 79, 0.8],
+              outline: {
+                color: [255, 255, 255],
+                width: 1,
               },
             },
-            container: "sketch-container",
           });
-          sketchRef.current = sketch;
 
+          // Handle create event
+          const handleCreate = (event: any) => {
+            if (event.state === "complete") {
+              const newGraphic = event.graphic;
+              newGraphic.attributes = {
+                id: Date.now(),
+                status: "Active",
+                lastUpdated: new Date().toISOString(),
+              };
+
+              useParcelStore.getState().addParcel({
+                id: newGraphic.attributes.id,
+                geometry: newGraphic.geometry.toJSON(),
+                attributes: newGraphic.attributes,
+              });
+              setSelectedGraphic(newGraphic); // Select the newly created graphic
+            }
+          };
+
+          sketchVM.on("create", handleCreate);
+          setSketchVM(sketchVM);
+
+          // Load saved parcels after sketch layer is initialized
+          loadSavedParcels();
+
+          // Handle click to select graphics or query
           viewRef.current.on("click", async (event) => {
-            const parcelLayer = layerRef.current;
-            if (!parcelLayer || !viewRef.current || !isMounted.current) return;
+            if (!viewRef.current || !isMounted.current) return;
 
+            // Perform hitTest to detect graphics
+            const hitTestResult = await viewRef.current.hitTest(event);
+  const sketchGraphic = hitTestResult.results.find(
+    (result): result is __esri.MapViewGraphicHit => // Type Guard
+      'graphic' in result && result.graphic.layer === sketchLayerRef.current
+  )?.graphic;
+
+            if (sketchGraphic) {
+              setSelectedGraphic(sketchGraphic); // Set selected graphic
+              sketchVM.update(sketchGraphic, { tool: "reshape" }); // Enable editing
+              return;
+            } else {
+              setSelectedGraphic(null); // Clear selection if no sketch graphic is clicked
+            }
+
+            // Fallback to parcel layer query
+            const parcelLayer = layerRef.current;
+            if (!parcelLayer) return;
             const query = parcelLayer.createQuery();
             query.geometry = event.mapPoint;
             query.distance = 5;
@@ -350,7 +399,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             query.spatialRelationship = "intersects";
             query.returnGeometry = true;
             query.outFields = ["*"];
-
             try {
               const { features } = await parcelLayer.queryFeatures(query);
               if (features.length > 0 && viewRef.current && isMounted.current) {
@@ -377,9 +425,9 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
               console.log("Map and layers are ready");
             }
           } catch (error: any) {
-            if (error.name === "AbortError") {
+            if (error.name === "AbortError")
               console.warn("Map loading aborted");
-            } else {
+            else {
               console.error("Error initializing map or layers:", error);
               setError("فشل تحميل الخريطة: حاول مرة أخرى");
             }
@@ -388,6 +436,10 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
               setIsLoading(false);
             }
           }
+
+          return () => {
+            sketchVM.destroy();
+          };
         }
       };
 
@@ -405,11 +457,8 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           webMapRef.current = null;
         }
         if (highlightRef.current) highlightRef.current.remove();
-        if (layerListRef.current) layerListRef.current.destroy();
-        if (sketchRef.current) sketchRef.current.destroy();
-        if (expandRef.current) expandRef.current.destroy();
       };
-    }, []);
+    }, [loadSavedParcels]);
 
     useEffect(() => {
       if (
@@ -419,29 +468,24 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
         !memoizedData ||
         memoizedData.length === 0 ||
         !isMounted.current
-      ) {
+      )
         return;
-      }
 
       const view = viewRef.current;
-
       const filteredData = filter
         ? memoizedData.filter((item) => item.region === filter)
         : memoizedData;
 
       if (
-        JSON.stringify(filteredData) === JSON.stringify(lastFilteredData.current)
-      ) {
+        JSON.stringify(filteredData) ===
+        JSON.stringify(lastFilteredData.current)
+      )
         return;
-      }
 
       lastFilteredData.current = filteredData;
 
       if (filteredData.length === 0) {
-        debouncedGoTo(view, {
-          center: [54.37, 24.47],
-          zoom: 10,
-        });
+        debouncedGoTo(view, { center: [54.37, 24.47], zoom: 10 });
         return;
       }
 
@@ -449,7 +493,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
       let maxLat = -Infinity;
       let minLon = Infinity;
       let maxLon = -Infinity;
-
       const graphics: Graphic[] = [];
 
       filteredData.forEach((item) => {
@@ -458,30 +501,17 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             .trim()
             .split(/[, -]+/)
             .map((coord) => parseFloat(coord));
-
           if (isNaN(lat) || isNaN(lon)) {
             console.warn("Invalid coordinates for item:", item);
             return;
           }
-
           minLat = Math.min(minLat, lat);
           maxLat = Math.max(maxLat, lat);
           minLon = Math.min(minLon, lon);
           maxLon = Math.max(maxLon, lon);
 
-          const point = new Point({
-            longitude: lon,
-            latitude: lat,
-          });
-
-          const marker = new SimpleMarkerSymbol({
-            color: [226, 119, 40],
-            outline: {
-              color: [255, 255, 255],
-              width: 1,
-            },
-          });
-
+          const point = new Point({ longitude: lon, latitude: lat });
+          const marker = filter ? highlightedMarkerSymbol : defaultMarkerSymbol;
           const graphic = new Graphic({
             geometry: point,
             symbol: marker,
@@ -494,14 +524,11 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
               lastUpdated: item.lastUpdated,
             },
           });
-
           graphics.push(graphic);
         } catch (error) {
           console.error("Error parsing coordinates:", item.coordinates, error);
         }
       });
-
-      console.log("Calculated bounds:", { minLat, maxLat, minLon, maxLon });
 
       if (graphics.length > 0 && markersLayerRef.current) {
         markersLayerRef.current.removeAll();
@@ -510,7 +537,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
         const centerLat = (minLat + maxLat) / 2;
         const centerLon = (minLon + maxLon) / 2;
-
         const latDiff = maxLat - minLat;
         const lonDiff = maxLon - minLon;
         const maxDiff = Math.max(latDiff, lonDiff);
@@ -519,44 +545,34 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
         else if (maxDiff > 0.1) zoomLevel = 9;
         else if (maxDiff > 0.01) zoomLevel = 11;
 
-        console.log("Zooming to:", {
-          center: [centerLon, centerLat],
-          zoom: zoomLevel,
-        });
-
         debouncedGoTo(view, {
           center: [centerLon, centerLat],
           zoom: zoomLevel,
         });
-
         setHasZoomed(true);
       }
-
-      return () => {
-        if (viewRef.current && viewRef.current.map) {
-          if (markersLayerRef.current) {
-            viewRef.current.map.remove(markersLayerRef.current);
-          }
-        }
-      };
-    }, [filter, memoizedData, isMapReady, stableT, debouncedGoTo, hasZoomed]);
+    }, [
+      filter,
+      memoizedData,
+      isMapReady,
+      stableT,
+      debouncedGoTo,
+      hasZoomed,
+      defaultMarkerSymbol,
+      highlightedMarkerSymbol,
+    ]);
 
     useEffect(() => {
       if (!viewRef.current || !layerRef.current || !isMounted.current) return;
-
       if (selectedId === null) {
-        if (viewRef.current) {
-          viewRef.current.graphics.removeAll();
-        }
+        if (viewRef.current) viewRef.current.graphics.removeAll();
         return;
       }
-
       const query = new Query({
         where: `OBJECTID = ${selectedId}`,
         returnGeometry: true,
         outFields: ["*"],
       });
-
       layerRef.current
         .queryFeatures(query)
         .then((result) => {
@@ -572,9 +588,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             });
           }
         })
-        .catch((err) => {
-          console.error("Error querying selected feature:", err);
-        });
+        .catch((err) => console.error("Error querying selected feature:", err));
     }, [selectedId, debouncedGoTo]);
 
     useEffect(() => {
@@ -592,6 +606,18 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
         if (!document.fullscreenElement) view.container.requestFullscreen();
         else document.exitFullscreen();
       }
+    };
+
+   const handleLayersClick = (event: React.MouseEvent<HTMLElement>) => {
+  setAnchorEl(anchorEl ? null : event.currentTarget);
+};
+
+    const toggleLayerVisibility = (layerName: string) => {
+      setLayerVisibility((prev) => ({
+        ...prev,
+        [layerName as keyof typeof layerVisibility]:
+          !prev[layerName as keyof typeof layerVisibility],
+      }));
     };
 
     const responsiveStyles = {
@@ -670,15 +696,53 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             </Button>
             <Button
               sx={responsiveStyles.button}
-              onClick={() => expandRef.current?.expand()}
+              onClick={handleLayersClick}
               startIcon={<span style={{ fontSize: "1rem" }}>⋮⋮</span>}
             >
               {i18n.language === "en" ? "Layers" : "الطبقات"}
             </Button>
+            <Button
+              sx={responsiveStyles.button}
+              onClick={() => sketchVM?.create("polygon")}
+              startIcon={<span style={{ fontSize: "1rem" }}>✏️</span>}
+            >
+              {i18n.language === "en" ? "Draw Parcel" : "رسم مخطط"}
+            </Button>
+            <Button
+              sx={responsiveStyles.button}
+              onClick={deleteSelectedGraphic}
+              disabled={!selectedGraphic}
+              startIcon={<span style={{ fontSize: "1rem" }}>🗑️</span>}
+            >
+              {i18n.language === "en" ? "Delete Drawing" : "حذف الرسمة"}
+            </Button>
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleLayersClick}
+              anchorOrigin={{
+                vertical: "bottom",
+                horizontal: "right",
+              }}
+              transformOrigin={{
+                vertical: "top",
+                horizontal: "right",
+              }}
+              MenuListProps={{ onMouseLeave: handleLayersClick }}
+            >
+              <MenuItem onClick={() => toggleLayerVisibility("parcels")}>
+                {`Parcels Layer ${layerVisibility.parcels ? "👁️" : "👁️‍🗨️"}`}
+              </MenuItem>
+              <MenuItem onClick={() => toggleLayerVisibility("population")}>
+                {`Population Layer ${layerVisibility.population ? "👁️" : "👁️‍🗨️"}`}
+              </MenuItem>
+              <MenuItem onClick={() => toggleLayerVisibility("markers")}>
+                {`Markers Layer ${layerVisibility.markers ? "👁️" : "👁️‍🗨️"}`}
+              </MenuItem>
+            </Menu>
           </Box>
         </Box>
         <Box sx={responsiveStyles.mapDiv} ref={mapDiv}>
-          <div id="sketch-container" style={{ display: "none" }}></div>
           <Backdrop
             open={isLoading}
             sx={{
@@ -718,3 +782,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 );
 
 export default ParcelMap;
+
+
+
+

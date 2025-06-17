@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   DataGrid,
   type GridColDef,
@@ -43,36 +43,6 @@ interface PopulationDataGridProps {
   onDataChange: (newData: PopulationData[]) => void;
 }
 
-const fallbackPopulationData: PopulationData[] = [
-  {
-    id: 1,
-    location: "Al Nahda",
-    region: "Amman",
-    coordinates: "54.7400 - 24.2783",
-    users: 13139,
-    status: "Active",
-    lastUpdated: "5/21/2025",
-  },
-  {
-    id: 2,
-    location: "Jabal Amman",
-    region: "Amman",
-    coordinates: "54.7215 - 24.6190",
-    users: 8000,
-    status: "Active",
-    lastUpdated: "5/21/2025",
-  },
-  {
-    id: 3,
-    location: "Chicago Warehouse",
-    region: "Amman",
-    coordinates: "41.8781 - 87.6298",
-    users: 567,
-    status: "Maintenance",
-    lastUpdated: "6/13/2025",
-  },
-];
-
 const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
   data,
   view,
@@ -83,7 +53,6 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
   const [tableData, setTableData] = useState<PopulationData[]>([]);
   const [, setTotalRows] = useState(0);
   const [columns, setColumns] = useState<GridColDef[]>([]);
-  const [isLoading] = useState(false);
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -105,18 +74,31 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
   const saveToLocalStorage = useCallback(
-    (data: PopulationData[]) => {
+    (data: PopulationData[], userAction: boolean = false) => {
       const formattedData = data.map((item) => {
         const coords = item.coordinates.trim().split(/[, -]+/);
         const lat = parseFloat(coords[0]) || 0;
         const lon = parseFloat(coords[1]) || 0;
         return {
-          ...item,
-          coordinates: `${lat.toFixed(4)} - ${lon.toFixed(4)}`,
+          id: item.id,
+          location: item.location,
+          region: item.region,
+          coordinates: `${lat.toFixed(4)},${lon.toFixed(4)}`,
+          users: item.users,
+          status: item.status,
+          lastUpdated: item.lastUpdated,
+          OBJECTID: item.OBJECTID,
         };
       });
-      localStorage.setItem("populationData", JSON.stringify(formattedData));
-      onDataChange(formattedData);
+      try {
+        localStorage.setItem("populationData", JSON.stringify(formattedData));
+        console.log("Saved to localStorage:", formattedData.length, "items");
+        if (userAction) {
+          onDataChange(formattedData);
+        }
+      } catch (e) {
+        console.error("Error saving to localStorage:", e);
+      }
     },
     [onDataChange]
   );
@@ -133,41 +115,31 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
     [filter]
   );
 
-  const loadData = useCallback(() => {
-    const storedData = localStorage.getItem("populationData");
-    let initialData: PopulationData[] = [];
-    if (storedData && JSON.parse(storedData).length > 0) {
-      initialData = JSON.parse(storedData);
-    } else {
-      console.log("No data in localStorage, using fallback data.");
-      initialData = data || fallbackPopulationData;
-    }
-    // تعديل الـ coordinates لـ 4 أرقام بعد العشرية عند التحميل
-    const formattedInitialData = initialData.map((item) => {
+  const formattedData = useMemo(() => {
+    return data.map((item) => {
       const coords = item.coordinates.trim().split(/[, -]+/);
       const lat = parseFloat(coords[0]) || 0;
       const lon = parseFloat(coords[1]) || 0;
       return {
         ...item,
-        coordinates: `${lat.toFixed(4)} - ${lon.toFixed(4)}`,
+        coordinates: `${lat.toFixed(4)},${lon.toFixed(4)}`,
       };
     });
-    applyFilter(formattedInitialData);
-    saveToLocalStorage(formattedInitialData); // حفظ البيانات المعدلة في localStorage
-  }, [data, applyFilter, saveToLocalStorage]);
+  }, [data]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    applyFilter(formattedData);
+  }, [formattedData, applyFilter]);
 
   const handleView = (row: PopulationData) => {
     if (view) {
       try {
-        const [lat, lon] = row.coordinates.split(" - ").map((coord) => {
+        const [lat, lon] = row.coordinates.split(",").map((coord) => {
           const num = parseFloat(coord);
           if (isNaN(num)) throw new Error("Invalid coordinate");
           return num;
         });
+        console.log("Zooming to:", { center: [lon, lat], zoom: 10 });
         view.goTo({
           center: [lon, lat],
           zoom: 10,
@@ -193,15 +165,9 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
 
   const confirmDelete = () => {
     if (selectedRow) {
-      const storedData = localStorage.getItem("populationData");
-      let allData = storedData
-        ? JSON.parse(storedData)
-        : data || fallbackPopulationData;
-      const newAllData = allData.filter(
-        (item: { id: number }) => item.id !== selectedRow.id
-      );
-      saveToLocalStorage(newAllData);
-      applyFilter(newAllData);
+      const newData = tableData.filter((item) => item.id !== selectedRow.id);
+      saveToLocalStorage(newData, true);
+      applyFilter(newData);
       setDeleteDialogOpen(false);
       setOpenSnackbar(true);
     }
@@ -209,15 +175,11 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
 
   const handleSaveEdit = () => {
     if (editedData && selectedRow) {
-      const storedData = localStorage.getItem("populationData");
-      let allData = storedData
-        ? JSON.parse(storedData)
-        : data || fallbackPopulationData;
-      const newAllData = allData.map((item: { id: number }) =>
+      const newData = tableData.map((item) =>
         item.id === editedData.id ? editedData : item
       );
-      saveToLocalStorage(newAllData);
-      applyFilter(newAllData);
+      saveToLocalStorage(newData, true);
+      applyFilter(newData);
       setEditDialogOpen(false);
       setOpenSnackbar(true);
     }
@@ -230,11 +192,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
 
   const handleSaveAdd = () => {
     if (newData.location && newData.coordinates) {
-      const storedData = localStorage.getItem("populationData");
-      let allData = storedData
-        ? JSON.parse(storedData)
-        : data || fallbackPopulationData;
-      const maxId = allData.reduce(
+      const maxId = tableData.reduce(
         (max: number, item: { id: number }) => Math.max(max, item.id),
         0
       );
@@ -244,11 +202,11 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
       const updatedNewData = {
         ...newData,
         id: maxId + 1,
-        coordinates: `${lat.toFixed(4)} - ${lon.toFixed(4)}`,
+        coordinates: `${lat.toFixed(4)},${lon.toFixed(4)}`,
       };
-      const newAllData = [...allData, updatedNewData];
-      saveToLocalStorage(newAllData);
-      applyFilter(newAllData);
+      const newDataArray = [...tableData, updatedNewData];
+      saveToLocalStorage(newDataArray, true);
+      applyFilter(newDataArray);
       setAddDialogOpen(false);
       setNewData({
         id: 0,
@@ -285,16 +243,23 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
     setPage(newPage);
   };
 
-  const filteredData = tableData.filter(
-    (row) =>
-      row.location &&
-      row.location.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredData = useMemo(
+    () =>
+      tableData.filter(
+        (row) =>
+          row.location &&
+          row.location.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [tableData, searchQuery]
   );
 
-  const rowsToDisplay =
-    filteredData.length === 0 && !isLoading
-      ? []
-      : filteredData.slice(page * pageSize, (page + 1) * pageSize);
+  const rowsToDisplay = useMemo(
+    () =>
+      filteredData.length === 0
+        ? []
+        : filteredData.slice(page * pageSize, (page + 1) * pageSize),
+    [filteredData, page, pageSize]
+  );
 
   const CustomPagination = () => {
     const totalPages = Math.ceil(filteredData.length / pageSize);
@@ -410,11 +375,11 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
         renderCell: (params) => {
           let backgroundColor = "#ffffff";
           let textColor = "#000000";
-          let borderRadius = "4px"; // Default square corners
+          let borderRadius = "4px";
           if (params.value === "Active") {
             backgroundColor = "#b1d2c2";
             textColor = "#000";
-            borderRadius = "45%"; // Circular shape
+            borderRadius = "45%";
           } else if (params.value === "Maintenance") {
             backgroundColor = "#FFF9C4";
             textColor = "#FFCA28";
@@ -435,7 +400,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
                   color: textColor,
                   padding: "4px 12px",
                   borderRadius,
-                  minWidth: "30px", // Ensure circle shape
+                  minWidth: "30px",
                   height: "30px",
                   display: "flex",
                   alignItems: "center",
@@ -494,10 +459,10 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
         width: "100%",
         mt: 2,
         backgroundColor: "#fff",
-        padding: "20px 0",
+        padding: "20px 10px",
         borderRadius: "10px",
-        maxWidth: { md: "80%" }, // Reduced width to 80% on md and above
-        margin: "0 auto", // Center the content
+        maxWidth: { md: "80%" },
+        margin: "0 auto",
         "& .MuiDataGrid-root": {
           borderRadius: 0,
           backgroundColor: "#ffffff",
@@ -552,17 +517,17 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
         gap={1}
         sx={{
           width: "100%",
-          flexDirection: { xs: "column", sm: "row" }, // Stack on mobile, row on tablet+
-          alignItems: { xs: "flex-start", sm: "center" }, // Align start on mobile
+          flexDirection: { xs: "column", sm: "row" },
+          alignItems: { xs: "flex-start", sm: "center" },
         }}
       >
         <Typography
           variant="h5"
           fontWeight="bold"
           sx={{
-            fontSize: { xs: "1rem", sm: "1.2rem", md: "1.5rem" }, // Smaller on mobile, larger on tablet+
-            mb: { xs: 1, sm: 0 }, // Margin bottom on mobile only
-            color: "#000", // Ensure text is visible
+            fontSize: { xs: "1rem", sm: "1.2rem", md: "1.5rem" },
+            mb: { xs: 1, sm: 0 },
+            color: "#000",
           }}
         >
           {t("LocationData")}
@@ -573,16 +538,16 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
             size="small"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            sx={{ width: { xs: "65%", sm: "200px" } }} // Full width on mobile, fixed on tablet+
+            sx={{ width: { xs: "65%", sm: "200px" } }}
           />
           <Button
             variant="contained"
             onClick={() => setAddDialogOpen(true)}
             sx={{
-              padding: { xs: "2px 6px", sm: "6px 12px" }, // Even smaller padding on mobile
-              fontSize: { xs: "0.7rem", sm: "0.875rem" }, // Smaller font on mobile
-              minWidth: { xs: "80px", sm: "120px" }, // Adjusted width, smaller on mobile
-              height: { xs: "30px", sm: "36px" }, // Reduced height on mobile
+              padding: { xs: "2px 6px", sm: "6px 12px" },
+              fontSize: { xs: "0.7rem", sm: "0.875rem" },
+              minWidth: { xs: "80px", sm: "120px" },
+              height: { xs: "30px", sm: "36px" },
             }}
           >
             {t("addLocation")}
@@ -594,7 +559,6 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
         <DataGrid
           rows={rowsToDisplay}
           columns={columns}
-          loading={isLoading}
           paginationModel={{ pageSize, page }}
           rowCount={filteredData.length}
           onPaginationModelChange={({ page }) => {

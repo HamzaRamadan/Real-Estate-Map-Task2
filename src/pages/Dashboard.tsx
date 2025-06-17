@@ -47,6 +47,7 @@ const Dashboard = () => {
   const [totalLocations, setTotalLocations] = useState(0);
   const [totalPopulation, setTotalPopulation] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [regions, setRegions] = useState<string[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -58,7 +59,6 @@ const Dashboard = () => {
     updateFilter: () => {}
   });
 
-  // تحسين الأداء باستخدام useCallback
   const updateFilter = useCallback((region: string | null) => {
     if (mapRef.current) {
       mapRef.current.updateFilter(region);
@@ -77,8 +77,16 @@ const Dashboard = () => {
         let initialData: PopulationData[] = [];
         
         if (storedData) {
-          initialData = JSON.parse(storedData);
-        } else {
+          try {
+            initialData = JSON.parse(storedData);
+            console.log("Retrieved from localStorage:", initialData.length, "items");
+          } catch (e) {
+            console.error("Error parsing localStorage data:", e);
+            localStorage.removeItem("populationData");
+          }
+        }
+
+        if (!initialData.length) {
           const response = await axios.get(
             "https://infomapapp.com/ksaarcgis/rest/services/Hosted/AbuDhabi_Boundary/FeatureServer/2/query",
             {
@@ -90,7 +98,7 @@ const Dashboard = () => {
               },
             }
           );
-
+          console.log("API Response:", response.data.features.length, "features");
           const features = response.data.features || [];
           initialData = features.map((f: any, index: number) => {
             const geometry = f.geometry || {};
@@ -106,13 +114,20 @@ const Dashboard = () => {
                 f.attributes?.statistical_district ||
                 "Unknown",
               region: f.attributes?.region || "Unknown",
-              coordinates: `${coords[0] || 0}, ${coords[1] || 0}`,
+              coordinates: `${coords[0] || 0},${coords[1] || 0}`,
               users: f.attributes?.total_population || 0,
               status: "Active",
               lastUpdated: lastEdited,
+              OBJECTID: f.attributes?.objectid,
             };
           });
-          localStorage.setItem("populationData", JSON.stringify(initialData));
+          try {
+            localStorage.setItem("populationData", JSON.stringify(initialData));
+            console.log("Successfully saved to localStorage:", initialData.length, "items");
+          } catch (e) {
+            console.error("Error saving to localStorage:", e);
+            setError("فشل في حفظ البيانات في التخزين المحلي.");
+          }
         }
 
         setLocationData(initialData);
@@ -129,6 +144,7 @@ const Dashboard = () => {
         setRegions(["All", ...uniqueRegions]);
       } catch (error) {
         console.error("Error fetching statistics:", error);
+        setError("فشل في جلب البيانات من الـ API. حاول مرة أخرى لاحقًا.");
       } finally {
         setLoading(false);
       }
@@ -144,19 +160,22 @@ const Dashboard = () => {
   }, [selectedRegion, updateFilter]);
 
   const handleDataChange = useCallback((newData: PopulationData[]) => {
-    setLocationData(newData);
-    setTotalLocations(newData.length);
-    const totalPop = newData.reduce((sum, item) => sum + item.users, 0);
-    setTotalPopulation(totalPop);
-    const uniqueRegions = [
-      ...new Set(
-        newData
-          .map((item) => item.region)
-          .filter((region) => region && region !== "Unknown")
-      ),
-    ];
-    setRegions(["All", ...uniqueRegions]);
-  }, []);
+    // Avoid unnecessary updates
+    if (JSON.stringify(newData) !== JSON.stringify(locationData)) {
+      setLocationData(newData);
+      setTotalLocations(newData.length);
+      const totalPop = newData.reduce((sum, item) => sum + item.users, 0);
+      setTotalPopulation(totalPop);
+      const uniqueRegions = [
+        ...new Set(
+          newData
+            .map((item) => item.region)
+            .filter((region) => region && region !== "Unknown")
+        ),
+      ];
+      setRegions(["All", ...uniqueRegions]);
+    }
+  }, [locationData]);
 
   const buttonStyle = useMemo(() => ({
     display: "flex",
@@ -232,10 +251,12 @@ const Dashboard = () => {
     setShareDialogOpen(false);
   }, [shareLink]);
 
-  const filteredData = useMemo(() => 
-    locationData.filter((d) => !selectedRegion || d.region === selectedRegion),
-    [locationData, selectedRegion]
-  );
+  const filteredData = useMemo(() => {
+    const result = locationData.filter((d) => !selectedRegion || d.region === selectedRegion);
+    // Only log if debugging is needed
+    // console.log("Filtered Data for ParcelMap:", result);
+    return result;
+  }, [locationData, selectedRegion]);
 
   return (
     <Box
@@ -253,6 +274,11 @@ const Dashboard = () => {
         boxSizing: "border-box",
       }}
     >
+      {error && (
+        <Typography color="error" sx={{ textAlign: "center", mb: 2 }}>
+          {error}
+        </Typography>
+      )}
       <Box
         display="flex"
         flexDirection={{ xs: "column", md: "row" }}
@@ -556,7 +582,7 @@ const Dashboard = () => {
                     fullWidth
                     {...(i18n.language === "ar"
                       ? { startIcon: <ShareLocationIcon fontSize="small" /> }
-                      : { startIcon: <ShareLocationIcon fontSize="small" />})}
+                      : { startIcon: <ShareLocationIcon fontSize="small" /> })}
                     sx={buttonStyle}
                     onClick={handleShareMap}
                   >
