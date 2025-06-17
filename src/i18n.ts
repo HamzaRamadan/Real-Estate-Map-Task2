@@ -47,7 +47,12 @@ const resources = {
       of:'of',
       Next:'Next',
       Previous:'Previous',
-      NoResultsFound:'No results found'
+      NoResultsFound:'No results found',
+     DeleteSelected:"DeleteSelected",
+      confirmMultiDelete: 'confirmMultiDelete',
+  areYouSureMultiDelete: "Are you sure you want to delete the selected lines?",
+
+
 
     },
   },
@@ -95,7 +100,10 @@ const resources = {
       of:'من',
       Next:'التالي',
       Previous:'السابق',
-      NoResultsFound:'لم يتم العثور على نتائج'
+      NoResultsFound:'لم يتم العثور على نتائج',
+      DeleteSelected:"حذف المحدد",
+      confirmMultiDelete: "تأكيد حذف متعدد",
+  areYouSureMultiDelete: "هل أنت متأكد من حذف الأسطر المحددة؟",
 
 
     },

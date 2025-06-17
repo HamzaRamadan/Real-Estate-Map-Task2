@@ -22,6 +22,13 @@ import {
   CircularProgress,
   Menu,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import SketchViewModel from "@arcgis/core/widgets/Sketch/SketchViewModel";
 import Point from "@arcgis/core/geometry/Point";
@@ -80,9 +87,9 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
     const [error, setError] = useState<string | null>(null);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [sketchVM, setSketchVM] = useState<SketchViewModel | null>(null);
-    const [selectedGraphic, setSelectedGraphic] = useState<Graphic | null>(
-      null
-    );
+    const [selectedGraphic, setSelectedGraphic] = useState<Graphic | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [openSnackbar, setOpenSnackbar] = useState(false);
 
     const stableT = useCallback((key: string) => t(key), [t]);
 
@@ -129,7 +136,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           },
           size: "12px",
           style: "circle",
-          // effect: "bloom(1.5, 0.5px, 0.2)",
         }),
       []
     );
@@ -274,12 +280,22 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
     }, []);
 
     const deleteSelectedGraphic = useCallback(() => {
+      setDeleteDialogOpen(true);
+    }, []);
+
+    const confirmDelete = useCallback(() => {
       if (selectedGraphic && sketchLayerRef.current) {
         sketchLayerRef.current.remove(selectedGraphic);
         useParcelStore.getState().removeParcel(selectedGraphic.attributes.id);
         setSelectedGraphic(null);
+        setDeleteDialogOpen(false);
+        setOpenSnackbar(true);
       }
     }, [selectedGraphic]);
+
+    const cancelDelete = useCallback(() => {
+      setDeleteDialogOpen(false);
+    }, []);
 
     useEffect(() => {
       isMounted.current = true;
@@ -325,7 +341,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           parcelLayer.visible = layerVisibility.parcels;
           populationLayer.visible = layerVisibility.population;
 
-          // Initialize SketchViewModel
           const sketchVM = new SketchViewModel({
             view: viewRef.current,
             layer: sketchLayer,
@@ -345,7 +360,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             },
           });
 
-          // Handle create event
           const handleCreate = (event: any) => {
             if (event.state === "complete") {
               const newGraphic = event.graphic;
@@ -360,36 +374,32 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
                 geometry: newGraphic.geometry.toJSON(),
                 attributes: newGraphic.attributes,
               });
-              setSelectedGraphic(newGraphic); // Select the newly created graphic
+              setSelectedGraphic(newGraphic);
             }
           };
 
           sketchVM.on("create", handleCreate);
           setSketchVM(sketchVM);
 
-          // Load saved parcels after sketch layer is initialized
           loadSavedParcels();
 
-          // Handle click to select graphics or query
           viewRef.current.on("click", async (event) => {
             if (!viewRef.current || !isMounted.current) return;
 
-            // Perform hitTest to detect graphics
             const hitTestResult = await viewRef.current.hitTest(event);
-  const sketchGraphic = hitTestResult.results.find(
-    (result): result is __esri.MapViewGraphicHit => // Type Guard
-      'graphic' in result && result.graphic.layer === sketchLayerRef.current
-  )?.graphic;
+            const sketchGraphic = hitTestResult.results.find(
+              (result): result is __esri.MapViewGraphicHit =>
+                'graphic' in result && result.graphic.layer === sketchLayerRef.current
+            )?.graphic;
 
             if (sketchGraphic) {
-              setSelectedGraphic(sketchGraphic); // Set selected graphic
-              sketchVM.update(sketchGraphic, { tool: "reshape" }); // Enable editing
+              setSelectedGraphic(sketchGraphic);
+              sketchVM.update(sketchGraphic, { tool: "reshape" });
               return;
             } else {
-              setSelectedGraphic(null); // Clear selection if no sketch graphic is clicked
+              setSelectedGraphic(null);
             }
 
-            // Fallback to parcel layer query
             const parcelLayer = layerRef.current;
             if (!parcelLayer) return;
             const query = parcelLayer.createQuery();
@@ -608,9 +618,9 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
       }
     };
 
-   const handleLayersClick = (event: React.MouseEvent<HTMLElement>) => {
-  setAnchorEl(anchorEl ? null : event.currentTarget);
-};
+    const handleLayersClick = (event: React.MouseEvent<HTMLElement>) => {
+      setAnchorEl(anchorEl ? null : event.currentTarget);
+    };
 
     const toggleLayerVisibility = (layerName: string) => {
       setLayerVisibility((prev) => ({
@@ -678,6 +688,9 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           border: "1px solid #bcc7ce",
         },
       },
+      drawDeleteButton: {
+        display: { xs: "none", sm: "flex" },
+      },
     };
 
     return (
@@ -689,13 +702,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           <Box sx={responsiveStyles.buttonContainer}>
             <Button
               sx={responsiveStyles.button}
-              onClick={handleToggleFullscreen}
-              startIcon={<span style={{ fontSize: "1rem" }}>⟐</span>}
-            >
-              {i18n.language === "en" ? "Fullscreen" : "ملء الشاشة"}
-            </Button>
-            <Button
-              sx={responsiveStyles.button}
               onClick={handleLayersClick}
               startIcon={<span style={{ fontSize: "1rem" }}>⋮⋮</span>}
             >
@@ -703,13 +709,20 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             </Button>
             <Button
               sx={responsiveStyles.button}
+              onClick={handleToggleFullscreen}
+              startIcon={<span style={{ fontSize: "1rem" }}>⟐</span>}
+            >
+              {i18n.language === "en" ? "Fullscreen" : "ملء الشاشة"}
+            </Button>
+            <Button
+              sx={[responsiveStyles.button, responsiveStyles.drawDeleteButton]}
               onClick={() => sketchVM?.create("polygon")}
               startIcon={<span style={{ fontSize: "1rem" }}>✏️</span>}
             >
               {i18n.language === "en" ? "Draw Parcel" : "رسم مخطط"}
             </Button>
             <Button
-              sx={responsiveStyles.button}
+              sx={[responsiveStyles.button, responsiveStyles.drawDeleteButton]}
               onClick={deleteSelectedGraphic}
               disabled={!selectedGraphic}
               startIcon={<span style={{ fontSize: "1rem" }}>🗑️</span>}
@@ -776,13 +789,54 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             </Typography>
           </Backdrop>
         </Box>
+        <Dialog
+          open={deleteDialogOpen}
+          onClose={cancelDelete}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#d32f2f" }}>
+            {t("confirmDelete") || "تأكيد الحذف"}
+          </DialogTitle>
+          <DialogContent sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
+            <DialogContentText
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                fontSize: "20px",
+              }}
+            >
+              {t("areYouSure") || "هل أنت متأكد من حذف الرسمة؟"}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, backgroundColor: "#f5f5f5" }}>
+            <Button onClick={cancelDelete} variant="outlined" color="primary">
+              {t("cancel") || "إلغاء"}
+            </Button>
+            <Button onClick={confirmDelete} variant="contained" color="error">
+              {t("delete") || "حذف"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+        <Snackbar
+          open={openSnackbar}
+          autoHideDuration={3000}
+          onClose={() => setOpenSnackbar(false)}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        >
+          <Alert
+            onClose={() => setOpenSnackbar(false)}
+            severity="success"
+            variant="filled"
+            sx={{ width: "100%" }}
+          >
+            {t("operationSuccess") || "تم تنفيذ العملية بنجاح"}
+          </Alert>
+        </Snackbar>
       </Box>
     );
   }
 );
 
 export default ParcelMap;
-
-
-
-
