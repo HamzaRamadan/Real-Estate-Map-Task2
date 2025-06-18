@@ -1,5 +1,4 @@
-// src/utils/notifier.ts
-// src/utils/notifier.ts
+
 import type { SnackbarKey, SnackbarMessage, OptionsObject } from 'notistack';
 
 let useSnackbarRef: (msg: SnackbarMessage, options?: OptionsObject) => SnackbarKey;

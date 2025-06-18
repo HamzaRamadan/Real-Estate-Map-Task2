@@ -12,7 +12,7 @@ export const getResponsiveStyles = ({ isMidRange }: StylesProps): Record<string,
      padding: {
       xs: "20px 0", // For small screens (mobile)
       sm: "20px 0", // For small screens (mobile)
-      md: "20px 20px", // For medium and larger screens
+      md: "20px 20px", // For medium and larger screens (tablet , laptop)
     },
     borderRadius: "10px",
     maxWidth: { md: "80%" },
@@ -25,7 +25,7 @@ export const getResponsiveStyles = ({ isMidRange }: StylesProps): Record<string,
     flexWrap: "wrap",
     gap: 1,
     flexDirection: { xs: "column", sm: "row" },
-    alignItems: { xs: "center", sm: "center" }, // بس الـ responsive واحدة
+    alignItems: { xs: "center", sm: "center" }, 
     px: { xs: 1, sm: 0 },
   } as SxProps<Theme>,
   title: {

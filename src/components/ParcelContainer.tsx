@@ -10,7 +10,6 @@ import { exportToPDF } from "../utils/exportToPDF";
 import { Box, CircularProgress, Typography } from "@mui/material";
 import Dashboard from "../pages/Dashboard";
 
-// مكون شاشة التحميل مع أنيميشن دوران وتوهج
 const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
   <Box
     sx={{

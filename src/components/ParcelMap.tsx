@@ -255,7 +255,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
     const checkLayerUrl = async (url: string): Promise<boolean> => {
       if (!isMounted.current) return false;
       try {
-        console.log("Checking layer URL:", url); // Add logging
+        console.log("Checking layer URL:", url); 
         const controller = new AbortController();
         abortControllerRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -316,7 +316,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
       isMounted.current = true;
 
       const initializeMap = async () => {
-        console.log("Starting map initialization"); // Add logging
+        console.log("Starting map initialization"); 
         const isUrlValid = await checkLayerUrl(featureLayerUrl);
         if (!isMounted.current) {
           console.log("Component unmounted, aborting map initialization");
@@ -331,7 +331,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
         }
 
         if (!webMapRef.current) {
-          console.log("Creating new WebMap and MapView"); // Add logging
+          console.log("Creating new WebMap and MapView"); 
           webMapRef.current = new WebMap({ basemap: "streets-vector" });
           viewRef.current = new MapView({
             container: mapDiv.current as HTMLDivElement,
@@ -344,12 +344,12 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
           onMapViewReady?.(viewRef.current);
 
-          console.log("Adding parcel layer"); // Add logging
+          console.log("Adding parcel layer"); 
           const parcelLayer = new FeatureLayer({ url: featureLayerUrl });
           webMapRef.current.add(parcelLayer);
           layerRef.current = parcelLayer;
 
-          console.log("Adding population layer"); // Add logging
+          console.log("Adding population layer"); 
           const populationLayer = new FeatureLayer({
             url: featureLayerUrl,
             outFields: ["*"],
@@ -357,7 +357,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           webMapRef.current.add(populationLayer);
           populationLayerRef.current = populationLayer;
 
-          console.log("Adding sketch layer"); // Add logging
+          console.log("Adding sketch layer"); 
           const sketchLayer = new GraphicsLayer({ id: "sketch-layer" });
           webMapRef.current.add(sketchLayer);
           sketchLayerRef.current = sketchLayer;
@@ -365,7 +365,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           parcelLayer.visible = layerVisibility.parcels;
           populationLayer.visible = layerVisibility.population;
 
-          console.log("Initializing SketchViewModel"); // Add logging
+          console.log("Initializing SketchViewModel"); 
           const sketchVM = new SketchViewModel({
             view: viewRef.current,
             layer: sketchLayer,
@@ -409,7 +409,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
           loadSavedParcels();
 
-          console.log("Setting up click handler"); // Add logging
+          console.log("Setting up click handler"); 
           viewRef.current.on("click", async (event) => {
             if (!viewRef.current || !isMounted.current) return;
 
@@ -450,7 +450,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             }
           });
 
-          console.log("Waiting for map and layers to load"); // Add logging
+          console.log("Waiting for map and layers to load"); 
           try {
             await Promise.all([
               viewRef.current.when(),
@@ -476,7 +476,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           }
 
           return () => {
-            console.log("Cleaning up SketchViewModel"); // Add logging
+            console.log("Cleaning up SketchViewModel"); 
             sketchVM.destroy();
           };
         }
@@ -491,7 +491,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           abortControllerRef.current = null;
         }
         if (viewRef.current) {
-          console.log("Destroying MapView"); // Add logging
+          console.log("Destroying MapView"); 
           viewRef.current.destroy();
           viewRef.current = null;
           webMapRef.current = null;

@@ -79,7 +79,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [rowSelectionModel, setRowSelectionModel] = useState<number[]>([]);
 
-  // Media query for screen width between 900px and 1100px
+  // Media query for screen width between 900px and 1100px (Responsive)
   const isMidRange = useMediaQuery("(min-width:900px) and (max-width:1100px)");
 
   // Get styles with isMidRange as parameter

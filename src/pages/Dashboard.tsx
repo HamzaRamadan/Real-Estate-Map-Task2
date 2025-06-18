@@ -160,7 +160,6 @@ const Dashboard = () => {
   }, [selectedRegion, updateFilter]);
 
   const handleDataChange = useCallback((newData: PopulationData[]) => {
-    // Avoid unnecessary updates
     if (JSON.stringify(newData) !== JSON.stringify(locationData)) {
       setLocationData(newData);
       setTotalLocations(newData.length);
@@ -253,7 +252,6 @@ const Dashboard = () => {
 
   const filteredData = useMemo(() => {
     const result = locationData.filter((d) => !selectedRegion || d.region === selectedRegion);
-    // Only log if debugging is needed
     // console.log("Filtered Data for ParcelMap:", result);
     return result;
   }, [locationData, selectedRegion]);

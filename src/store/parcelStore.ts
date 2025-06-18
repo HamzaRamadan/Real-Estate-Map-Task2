@@ -1,4 +1,3 @@
-// parcelStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -31,7 +30,9 @@ export const useParcelStore = create<ParcelStore>()(
         set({ parcels: [] }),
     }),
     {
-      name: "parcel-storage", // اسم التخزين في localStorage
+      name: "parcel-storage", 
     }
   )
 );
+
+
