@@ -63,6 +63,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
     paginationButtonStyles,
     paginationPageButtonStyles,
     statusCellStyles,
+    confirmDialogStyles,
     dialogTitleStyles,
     dialogContentStyles,
     dialogContentTextStyles,
@@ -532,17 +533,17 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
         onClose={() => setDeleteDialogOpen(false)}
         maxWidth="sm"
         fullWidth
-        fullScreen={dialogFullScreen}
+        sx={confirmDialogStyles}
       >
         <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#d32f2f", ...dialogTitleStyles }}>
           {t("confirmDelete")}
         </DialogTitle>
-        <DialogContent sx={{ backgroundColor: "#f5f5f5", ...dialogContentStyles }}>
+        <DialogContent sx={dialogContentStyles}>
           <DialogContentText sx={dialogContentTextStyles}>
             {t("areYouSure")}
           </DialogContentText>
         </DialogContent>
-        <DialogActions sx={{ backgroundColor: "#f5f5f5", ...dialogActionsStyles }}>
+        <DialogActions sx={dialogActionsStyles}>
           <Button
             onClick={() => setDeleteDialogOpen(false)}
             variant="outlined"
@@ -567,17 +568,17 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
         onClose={handleCancelMultiDelete}
         maxWidth="sm"
         fullWidth
-        fullScreen={dialogFullScreen}
+        sx={confirmDialogStyles}
       >
         <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#d32f2f", ...dialogTitleStyles }}>
           {t("confirmMultiDelete")}
         </DialogTitle>
-        <DialogContent sx={{ backgroundColor: "#f5f5f5", ...dialogContentStyles }}>
+        <DialogContent sx={dialogContentStyles}>
           <DialogContentText sx={dialogContentTextStyles}>
             {t("areYouSureMultiDelete")}
           </DialogContentText>
         </DialogContent>
-        <DialogActions sx={{ backgroundColor: "#f5f5f5", ...dialogActionsStyles }}>
+        <DialogActions sx={dialogActionsStyles}>
           <Button
             onClick={handleCancelMultiDelete}
             variant="outlined"
@@ -651,7 +652,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
             </>
           )}
         </DialogContent>
-        <DialogActions sx={{ backgroundColor: "#f5f5f5", ...dialogActionsStyles }}>
+        <DialogActions sx={dialogActionsStyles}>
           <Button
             onClick={handleCancelEdit}
             variant="outlined"
@@ -718,7 +719,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
             sx={{ mb: 1, ...textFieldStyles }}
           />
         </DialogContent>
-        <DialogActions sx={{ backgroundColor: "#f5f5f5", ...dialogActionsStyles }}>
+        <DialogActions sx={dialogActionsStyles}>
           <Button
             onClick={handleCancelAdd}
             variant="outlined"
@@ -780,7 +781,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ backgroundColor: "#f5f5f5", justifyContent: "center", ...dialogActionsStyles }}>
+        <DialogActions sx={dialogActionsStyles}>
           <Button
             onClick={handleCloseViewDialog}
             variant="contained"
