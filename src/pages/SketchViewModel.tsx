@@ -1,3 +1,5 @@
+
+
 // src/utils/initSketchVM.ts
 import SketchViewModel from "@arcgis/core/widgets/Sketch/SketchViewModel";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";

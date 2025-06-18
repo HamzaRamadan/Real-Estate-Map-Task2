@@ -48,9 +48,11 @@ const resources = {
       Next:'Next',
       Previous:'Previous',
       NoResultsFound:'No results found',
-     DeleteSelected:"DeleteSelected",
+     DeleteSelected:"DeleteSelected 🗑️",
       confirmMultiDelete: 'confirmMultiDelete',
   areYouSureMultiDelete: "Are you sure you want to delete the selected lines?",
+LocationDetails:" Location Details ",
+add:'Add',
 
 
 
@@ -101,11 +103,11 @@ const resources = {
       Next:'التالي',
       Previous:'السابق',
       NoResultsFound:'لم يتم العثور على نتائج',
-      DeleteSelected:"حذف المحدد",
+      DeleteSelected:" 🗑️ حذف المحدد",
       confirmMultiDelete: "تأكيد حذف متعدد",
   areYouSureMultiDelete: "هل أنت متأكد من حذف الأسطر المحددة؟",
-
-
+LocationDetails:"تفاصيل الموقع ",
+add:'اضافه',
     },
   },
 };

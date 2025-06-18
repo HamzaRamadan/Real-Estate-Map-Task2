@@ -8,14 +8,10 @@ import {
   Box,
   Typography,
   Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
   Button,
   TextField,
   Alert,
+  useMediaQuery,
 } from "@mui/material";
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import MapView from "@arcgis/core/views/MapView";
@@ -23,7 +19,14 @@ import { useTranslation } from "react-i18next";
 import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditNoteIcon from "@mui/icons-material/EditNote";
-import { useResponsiveStyles } from "./useResponsiveStyles";
+import { getResponsiveStyles } from "./ParcelDataGridStyles";
+import {
+  DeleteDialog,
+  MultiDeleteDialog,
+  ViewDialog,
+  EditDialog,
+  AddDialog,
+} from "./ParcelDataGridDialogs";
 
 interface PopulationData {
   id: number;
@@ -51,36 +54,6 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
   onDataChange,
 }) => {
   const { t } = useTranslation();
-  const {
-    boxStyles,
-    headerBoxStyles,
-    typographyStyles,
-    textFieldStyles,
-    buttonStyles,
-    dataGridStyles,
-    paginationBoxStyles,
-    paginationTypographyStyles,
-    paginationButtonStyles,
-    paginationPageButtonStyles,
-    statusCellStyles,
-    confirmDialogStyles,
-    dialogTitleStyles,
-    dialogContentStyles,
-    dialogContentTextStyles,
-    dialogActionsStyles,
-    dialogButtonStyles,
-    viewDialogStyles,
-    viewDialogContentStyles,
-    viewDialogBoxStyles,
-    viewDialogContentTextStyles,
-    viewDialogButtonStyles,
-    noRowsOverlayStyles,
-    loadingOverlayStyles,
-    snackbarAlertStyles,
-    columnFlex,
-    dialogFullScreen,
-  } = useResponsiveStyles();
-
   const [tableData, setTableData] = useState<PopulationData[]>([]);
   const [, setTotalRows] = useState(0);
   const [columns, setColumns] = useState<GridColDef[]>([]);
@@ -105,6 +78,12 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [rowSelectionModel, setRowSelectionModel] = useState<number[]>([]);
+
+  // Media query for screen width between 900px and 1100px
+  const isMidRange = useMediaQuery("(min-width:900px) and (max-width:1100px)");
+
+  // Get styles with isMidRange as parameter
+  const responsiveStyles = getResponsiveStyles({ isMidRange });
 
   const saveToLocalStorage = useCallback(
     (data: PopulationData[], userAction: boolean = false) => {
@@ -317,6 +296,20 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
     [filteredData, page, pageSize]
   );
 
+  const handleEditDataChange = (
+    key: keyof PopulationData,
+    value: string | number
+  ) => {
+    setEditedData((prev) => (prev ? { ...prev, [key]: value } : null));
+  };
+
+  const handleNewDataChange = (
+    key: keyof PopulationData,
+    value: string | number
+  ) => {
+    setNewData((prev) => ({ ...prev, [key]: value }));
+  };
+
   const CustomPagination = () => {
     const totalPages = Math.ceil(filteredData.length / pageSize);
     let startPage = Math.max(0, page - 1);
@@ -331,18 +324,22 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
     );
 
     return (
-      <Box sx={paginationBoxStyles}>
-        <Typography variant="caption" color="textSecondary" sx={paginationTypographyStyles}>
+      <Box sx={responsiveStyles.paginationContainer}>
+        <Typography
+          variant="caption"
+          color="textSecondary"
+          sx={responsiveStyles.paginationText}
+        >
           {t("Showing")} {page * pageSize + 1} {t("to")}{" "}
           {Math.min((page + 1) * pageSize, filteredData.length)} {t("of")}{" "}
           {filteredData.length} {t("results")}
         </Typography>
-        <Box display="flex" gap={0.5}>
+        <Box sx={responsiveStyles.paginationButtonContainer}>
           <Button
             variant="text"
             disabled={page === 0}
             onClick={() => handlePageChange(page - 1)}
-            sx={paginationButtonStyles}
+            sx={responsiveStyles.paginationPrevNextButton}
           >
             {t("Previous")}
           </Button>
@@ -351,7 +348,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
               key={num}
               variant={page + 1 === num ? "contained" : "text"}
               onClick={() => handlePageChange(num - 1)}
-              sx={paginationPageButtonStyles}
+              sx={responsiveStyles.paginationPageButton}
             >
               {num}
             </Button>
@@ -360,7 +357,7 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
             variant="text"
             disabled={(page + 1) * pageSize >= filteredData.length}
             onClick={() => handlePageChange(page + 1)}
-            sx={paginationButtonStyles}
+            sx={responsiveStyles.paginationPrevNextButton}
           >
             {t("Next")}
           </Button>
@@ -374,48 +371,67 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
       {
         field: "location",
         headerName: (t("location") || "Location").toUpperCase(),
-        flex: columnFlex.location,
+        flex: 1,
         align: "center",
         headerAlign: "center",
       },
       {
         field: "coordinates",
         headerName: (t("coordinates") || "Coordinates").toUpperCase(),
-        flex: columnFlex.coordinates,
+        flex: 1,
         align: "center",
         headerAlign: "center",
       },
       {
         field: "users",
         headerName: (t("users") || "Users").toUpperCase(),
-        flex: columnFlex.users,
+        flex: 1,
         align: "center",
         headerAlign: "center",
       },
       {
         field: "status",
         headerName: (t("status") || "Status").toUpperCase(),
-        flex: columnFlex.status,
+        flex: 1,
         align: "center",
         headerAlign: "center",
-        renderCell: (params) => (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              width: "100%",
-              height: "100%",
-            }}
-          >
-            <span style={statusCellStyles(params)}>{params.value}</span>
-          </Box>
-        ),
+        renderCell: (params) => {
+          let backgroundColor = "#ffffff";
+          let textColor = "#000000";
+          let borderRadius = "4px";
+          if (params.value === "Active") {
+            backgroundColor = "#b1d2c2";
+            textColor = "#000";
+            borderRadius = "45%";
+          } else if (params.value === "Maintenance") {
+            backgroundColor = "#FFF9C4";
+            textColor = "#FFCA28";
+          }
+          return (
+            <Box sx={responsiveStyles.statusBox}>
+              <span
+                style={{
+                  backgroundColor,
+                  color: textColor,
+                  padding: "4px 12px",
+                  borderRadius,
+                  minWidth: "30px",
+                  height: "30px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {params.value}
+              </span>
+            </Box>
+          );
+        },
       },
       {
         field: "lastUpdated",
         headerName: (t("lastUpdated") || "Last Updated").toUpperCase(),
-        flex: columnFlex.lastUpdated,
+        flex: 1,
         align: "center",
         headerAlign: "center",
       },
@@ -443,47 +459,31 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
             onClick={() => handleDelete(params.row as PopulationData)}
           />,
         ],
-        width: columnFlex.actions,
+        width: 120,
       },
     ];
 
     setColumns(baseColumns);
-  }, [t, columnFlex]);
+  }, [t]);
 
   return (
-    <Box sx={boxStyles}>
-      <Snackbar
-        open={openSnackbar}
-        autoHideDuration={3000}
-        onClose={() => setOpenSnackbar(false)}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
-      >
-        <Alert
-          onClose={() => setOpenSnackbar(false)}
-          severity="success"
-          variant="filled"
-          sx={snackbarAlertStyles}
-        >
-          {t("operationSuccess") || "تم تنفيذ العملية بنجاح"}
-        </Alert>
-      </Snackbar>
-
-      <Box sx={headerBoxStyles}>
-        <Typography variant="h5" fontWeight="bold" sx={typographyStyles}>
+    <Box sx={responsiveStyles.container}>
+      <Box sx={responsiveStyles.headerContainer}>
+        <Typography variant="h5" sx={responsiveStyles.title}>
           {t("LocationData")}
         </Typography>
-        <Box display="flex" alignItems="center" gap={0.5} flexWrap="wrap">
+        <Box sx={responsiveStyles.buttonContainer}>
           <TextField
             placeholder={t("SearchLocations")}
             size="small"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            sx={textFieldStyles}
+            sx={responsiveStyles.searchField}
           />
           <Button
             variant="contained"
             onClick={() => setAddDialogOpen(true)}
-            sx={buttonStyles}
+            sx={responsiveStyles.addButton}
           >
             {t("addLocation")}
           </Button>
@@ -492,306 +492,87 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
             color="error"
             disabled={rowSelectionModel.length === 0}
             onClick={handleOpenMultiDeleteDialog}
-            sx={buttonStyles}
+            sx={responsiveStyles.deleteSelectedButton}
           >
             {t("DeleteSelected")}
           </Button>
         </Box>
       </Box>
 
-      <Box sx={{ height: "100%", maxHeight: "100%", overflow: "auto" }}>
-        <DataGrid
-          rows={rowsToDisplay}
-          columns={columns}
-          paginationModel={{ pageSize, page }}
-          rowCount={filteredData.length}
-          onPaginationModelChange={({ page }) => {
-            handlePageChange(page);
-          }}
-          paginationMode="server"
-          hideFooterPagination
-          checkboxSelection
-          disableRowSelectionOnClick
-          onRowSelectionModelChange={(newSelection) => {
-            setRowSelectionModel(
-              Array.isArray(newSelection) ? newSelection.map(Number) : []
-            );
-          }}
-          rowSelectionModel={rowSelectionModel}
-          autoHeight
-          sx={dataGridStyles}
-          slots={{
-            footer: CustomPagination,
-            noRowsOverlay: () => <Box sx={noRowsOverlayStyles}>{t("NoResultsFound")}</Box>,
-            loadingOverlay: () => <Box sx={loadingOverlayStyles}>Loading...</Box>,
-          }}
-        />
-      </Box>
+      <DataGrid
+        rows={rowsToDisplay}
+        columns={columns}
+        checkboxSelection
+        disableRowSelectionOnClick
+        onRowSelectionModelChange={(newRowSelectionModel) => {
+          setRowSelectionModel(newRowSelectionModel as number[]);
+        }}
+        rowSelectionModel={rowSelectionModel}
+        hideFooter
+        autoHeight
+        sx={responsiveStyles.dataGrid}
+        localeText={{
+          noRowsLabel: t("noResultsFound") || "No results found",
+        }}
+      />
 
-      <Dialog
+      <CustomPagination />
+
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setOpenSnackbar(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={responsiveStyles.snackbar}
+      >
+        <Alert
+          onClose={() => setOpenSnackbar(false)}
+          severity="success"
+          sx={responsiveStyles.alert}
+        >
+          {t("operationSuccess")}
+        </Alert>
+      </Snackbar>
+
+      <DeleteDialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        sx={confirmDialogStyles}
-      >
-        <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#d32f2f", ...dialogTitleStyles }}>
-          {t("confirmDelete")}
-        </DialogTitle>
-        <DialogContent sx={dialogContentStyles}>
-          <DialogContentText sx={dialogContentTextStyles}>
-            {t("areYouSure")}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={dialogActionsStyles}>
-          <Button
-            onClick={() => setDeleteDialogOpen(false)}
-            variant="outlined"
-            color="primary"
-            sx={dialogButtonStyles}
-          >
-            {t("cancel") || "إلغاء"}
-          </Button>
-          <Button
-            onClick={confirmDelete}
-            variant="contained"
-            color="error"
-            sx={dialogButtonStyles}
-          >
-            {t("delete") || "حذف"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={confirmDelete}
+        styles={responsiveStyles}
+      />
 
-      <Dialog
+      <MultiDeleteDialog
         open={multiDeleteDialogOpen}
         onClose={handleCancelMultiDelete}
-        maxWidth="sm"
-        fullWidth
-        sx={confirmDialogStyles}
-      >
-        <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#d32f2f", ...dialogTitleStyles }}>
-          {t("confirmMultiDelete")}
-        </DialogTitle>
-        <DialogContent sx={dialogContentStyles}>
-          <DialogContentText sx={dialogContentTextStyles}>
-            {t("areYouSureMultiDelete")}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={dialogActionsStyles}>
-          <Button
-            onClick={handleCancelMultiDelete}
-            variant="outlined"
-            color="primary"
-            sx={dialogButtonStyles}
-          >
-            {t("cancel") || "إلغاء"}
-          </Button>
-          <Button
-            onClick={handleMultiDelete}
-            variant="contained"
-            color="error"
-            sx={dialogButtonStyles}
-          >
-            {t("delete") || "حذف"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleMultiDelete}
+        count={rowSelectionModel.length}
+        styles={responsiveStyles}
+      />
 
-      <Dialog
-        open={editDialogOpen}
-        onClose={handleCancelEdit}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={dialogFullScreen}
-      >
-        <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#1976d2", ...dialogTitleStyles }}>
-          {t("editLocation") || "تعديل الموقع"}
-        </DialogTitle>
-        <DialogContent sx={dialogContentStyles}>
-          {editedData && (
-            <>
-              <TextField
-                autoFocus
-                margin="dense"
-                label={t("location") || "Location"}
-                fullWidth
-                value={editedData.location}
-                onChange={(e) =>
-                  setEditedData({ ...editedData, location: e.target.value })
-                }
-                variant="outlined"
-                sx={{ mb: 1, ...textFieldStyles }}
-              />
-              <TextField
-                margin="dense"
-                label={t("users") || "Users"}
-                type="number"
-                fullWidth
-                value={editedData.users}
-                onChange={(e) =>
-                  setEditedData({
-                    ...editedData,
-                    users: parseInt(e.target.value) || 0,
-                  })
-                }
-                variant="outlined"
-                sx={{ mb: 1, ...textFieldStyles }}
-              />
-              <TextField
-                margin="dense"
-                label={t("coordinates") || "Coordinates"}
-                fullWidth
-                value={editedData.coordinates}
-                onChange={(e) =>
-                  setEditedData({ ...editedData, coordinates: e.target.value })
-                }
-                variant="outlined"
-                sx={{ mb: 1, ...textFieldStyles }}
-              />
-            </>
-          )}
-        </DialogContent>
-        <DialogActions sx={dialogActionsStyles}>
-          <Button
-            onClick={handleCancelEdit}
-            variant="outlined"
-            color="primary"
-            sx={dialogButtonStyles}
-          >
-            {t("cancel") || "إلغاء"}
-          </Button>
-          <Button
-            onClick={handleSaveEdit}
-            variant="contained"
-            color="primary"
-            sx={dialogButtonStyles}
-          >
-            {t("save") || "حفظ"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={addDialogOpen}
-        onClose={handleCancelAdd}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={dialogFullScreen}
-      >
-        <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#2e7d32", ...dialogTitleStyles }}>
-          {t("addLocation") || "إضافة موقع جديد"}
-        </DialogTitle>
-        <DialogContent sx={dialogContentStyles}>
-          <TextField
-            autoFocus
-            margin="dense"
-            label={t("location") || "Location"}
-            fullWidth
-            value={newData.location}
-            onChange={(e) =>
-              setNewData({ ...newData, location: e.target.value })
-            }
-            variant="outlined"
-            sx={{ mb: 1, ...textFieldStyles }}
-          />
-          <TextField
-            margin="dense"
-            label={t("coordinates") || "Coordinates"}
-            fullWidth
-            value={newData.coordinates}
-            onChange={(e) =>
-              setNewData({ ...newData, coordinates: e.target.value })
-            }
-            variant="outlined"
-            sx={{ mb: 1, ...textFieldStyles }}
-          />
-          <TextField
-            margin="dense"
-            label={t("users") || "Users"}
-            type="number"
-            fullWidth
-            value={newData.users}
-            onChange={(e) =>
-              setNewData({ ...newData, users: parseInt(e.target.value) || 0 })
-            }
-            variant="outlined"
-            sx={{ mb: 1, ...textFieldStyles }}
-          />
-        </DialogContent>
-        <DialogActions sx={dialogActionsStyles}>
-          <Button
-            onClick={handleCancelAdd}
-            variant="outlined"
-            color="primary"
-            sx={dialogButtonStyles}
-          >
-            {t("cancel") || "إلغاء"}
-          </Button>
-          <Button
-            onClick={handleSaveAdd}
-            variant="contained"
-            color="success"
-            sx={dialogButtonStyles}
-          >
-            {t("save") || "حفظ"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
+      <ViewDialog
         open={viewDialogOpen}
         onClose={handleCloseViewDialog}
-        maxWidth="md"
-        fullWidth
-        fullScreen={dialogFullScreen}
-        sx={viewDialogStyles}
-      >
-        <DialogTitle
-          sx={{
-            backgroundColor: "#f5f5f5",
-            color: "#1976d2",
-            textAlign: "center",
-            ...dialogTitleStyles,
-          }}
-        >
-          {t("Location Details") || "تفاصيل الموقع"}
-        </DialogTitle>
-        <DialogContent sx={viewDialogContentStyles}>
-          {selectedRow && (
-            <Box sx={viewDialogBoxStyles}>
-              <DialogContentText sx={viewDialogContentTextStyles}>
-                <strong>{t("location") || "Location"}:</strong>{" "}
-                {selectedRow.location}
-              </DialogContentText>
-              <DialogContentText sx={viewDialogContentTextStyles}>
-                <strong>{t("coordinates") || "Coordinates"}:</strong>{" "}
-                {selectedRow.coordinates}
-              </DialogContentText>
-              <DialogContentText sx={viewDialogContentTextStyles}>
-                <strong>{t("users") || "Users"}:</strong> {selectedRow.users}
-              </DialogContentText>
-              <DialogContentText sx={viewDialogContentTextStyles}>
-                <strong>{t("status") || "Status"}:</strong> {selectedRow.status}
-              </DialogContentText>
-              <DialogContentText sx={viewDialogContentTextStyles}>
-                <strong>{t("lastUpdated") || "Last Updated"}:</strong>{" "}
-                {selectedRow.lastUpdated}
-              </DialogContentText>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={dialogActionsStyles}>
-          <Button
-            onClick={handleCloseViewDialog}
-            variant="contained"
-            color="primary"
-            sx={viewDialogButtonStyles}
-          >
-            {t("close") || "إغلاق"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        data={selectedRow}
+        styles={responsiveStyles}
+      />
+
+      <EditDialog
+        open={editDialogOpen}
+        onClose={handleCancelEdit}
+        onConfirm={handleSaveEdit}
+        data={editedData}
+        onChange={handleEditDataChange}
+        styles={responsiveStyles}
+      />
+
+      <AddDialog
+        open={addDialogOpen}
+        onClose={handleCancelAdd}
+        onConfirm={handleSaveAdd}
+        data={newData}
+        onChange={handleNewDataChange}
+        styles={responsiveStyles}
+      />
     </Box>
   );
 };

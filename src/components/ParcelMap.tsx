@@ -29,12 +29,15 @@ import {
   DialogActions,
   Snackbar,
   Alert,
+  useMediaQuery,
 } from "@mui/material";
 import SketchViewModel from "@arcgis/core/widgets/Sketch/SketchViewModel";
 import Point from "@arcgis/core/geometry/Point";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol";
 import debounce from "lodash/debounce";
 import { useParcelStore } from "../store/parcelStore";
+import { getResponsiveStyles } from "./ParcelMapStyles";
+import {type SxProps,type Theme } from "@mui/material";
 
 interface PopulationData {
   id: number;
@@ -90,6 +93,12 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
     const [selectedGraphic, setSelectedGraphic] = useState<Graphic | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [openSnackbar, setOpenSnackbar] = useState(false);
+
+    // Media query for screen width between 900px and 1100px
+    const isMidRange = useMediaQuery("(min-width:900px) and (max-width:1100px)");
+
+    // Get styles with isMidRange as parameter
+    const responsiveStyles = getResponsiveStyles({ isMidRange });
 
     const stableT = useCallback((key: string) => t(key), [t]);
 
@@ -246,6 +255,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
     const checkLayerUrl = async (url: string): Promise<boolean> => {
       if (!isMounted.current) return false;
       try {
+        console.log("Checking layer URL:", url); // Add logging
         const controller = new AbortController();
         abortControllerRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -253,13 +263,18 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
-        if (!response.ok)
+        if (!response.ok) {
+          console.error(`HTTP error! status: ${response.status}`);
           throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        console.log("Layer URL is valid");
         return true;
       } catch (err: any) {
-        if (err.name === "AbortError")
+        if (err.name === "AbortError") {
           console.warn("URL check aborted:", err.message);
-        else console.error("Error checking layer URL:", err);
+        } else {
+          console.error("Error checking layer URL:", err);
+        }
         return false;
       }
     };
@@ -301,16 +316,22 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
       isMounted.current = true;
 
       const initializeMap = async () => {
+        console.log("Starting map initialization"); // Add logging
         const isUrlValid = await checkLayerUrl(featureLayerUrl);
-        if (!isMounted.current) return;
+        if (!isMounted.current) {
+          console.log("Component unmounted, aborting map initialization");
+          return;
+        }
 
         if (!isUrlValid) {
           setError("فشل تحميل الخريطة: رابط الطبقة غير صالح أو غير متاح");
           setIsLoading(false);
+          console.error("Invalid layer URL, map initialization failed");
           return;
         }
 
         if (!webMapRef.current) {
+          console.log("Creating new WebMap and MapView"); // Add logging
           webMapRef.current = new WebMap({ basemap: "streets-vector" });
           viewRef.current = new MapView({
             container: mapDiv.current as HTMLDivElement,
@@ -323,10 +344,12 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
           onMapViewReady?.(viewRef.current);
 
+          console.log("Adding parcel layer"); // Add logging
           const parcelLayer = new FeatureLayer({ url: featureLayerUrl });
           webMapRef.current.add(parcelLayer);
           layerRef.current = parcelLayer;
 
+          console.log("Adding population layer"); // Add logging
           const populationLayer = new FeatureLayer({
             url: featureLayerUrl,
             outFields: ["*"],
@@ -334,6 +357,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           webMapRef.current.add(populationLayer);
           populationLayerRef.current = populationLayer;
 
+          console.log("Adding sketch layer"); // Add logging
           const sketchLayer = new GraphicsLayer({ id: "sketch-layer" });
           webMapRef.current.add(sketchLayer);
           sketchLayerRef.current = sketchLayer;
@@ -341,6 +365,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           parcelLayer.visible = layerVisibility.parcels;
           populationLayer.visible = layerVisibility.population;
 
+          console.log("Initializing SketchViewModel"); // Add logging
           const sketchVM = new SketchViewModel({
             view: viewRef.current,
             layer: sketchLayer,
@@ -375,6 +400,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
                 attributes: newGraphic.attributes,
               });
               setSelectedGraphic(newGraphic);
+              setOpenSnackbar(true);
             }
           };
 
@@ -383,6 +409,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
 
           loadSavedParcels();
 
+          console.log("Setting up click handler"); // Add logging
           viewRef.current.on("click", async (event) => {
             if (!viewRef.current || !isMounted.current) return;
 
@@ -423,6 +450,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
             }
           });
 
+          console.log("Waiting for map and layers to load"); // Add logging
           try {
             await Promise.all([
               viewRef.current.when(),
@@ -435,9 +463,9 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
               console.log("Map and layers are ready");
             }
           } catch (error: any) {
-            if (error.name === "AbortError")
+            if (error.name === "AbortError") {
               console.warn("Map loading aborted");
-            else {
+            } else {
               console.error("Error initializing map or layers:", error);
               setError("فشل تحميل الخريطة: حاول مرة أخرى");
             }
@@ -448,6 +476,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           }
 
           return () => {
+            console.log("Cleaning up SketchViewModel"); // Add logging
             sketchVM.destroy();
           };
         }
@@ -462,6 +491,7 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           abortControllerRef.current = null;
         }
         if (viewRef.current) {
+          console.log("Destroying MapView"); // Add logging
           viewRef.current.destroy();
           viewRef.current = null;
           webMapRef.current = null;
@@ -630,69 +660,6 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
       }));
     };
 
-    const responsiveStyles = {
-      container: {
-        backgroundColor: "#fdfdfd",
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        width: "100%",
-        maxWidth: "100vw",
-        minWidth: 0,
-        height: "100%",
-        border: "1px solid #e0e0e0",
-        borderRadius: 4,
-        margin: 0,
-        padding: 0,
-      },
-      mapHeader: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        backgroundColor: "#fff",
-        p: 1,
-        borderBottom: "none",
-      },
-      mapTitle: {
-        fontSize: { xs: "1rem", sm: "1.2rem" },
-        fontWeight: "bold",
-        color: "#2c3e50",
-      },
-      mapDiv: {
-        height: { xs: "100%", sm: "100%" },
-        width: "100%",
-        maxWidth: "100%",
-        position: "relative",
-        minHeight: "300px",
-        mt: 0,
-      },
-      buttonContainer: {
-        display: "flex",
-        alignItems: "center",
-        gap: 2,
-      },
-      button: {
-        backgroundColor: "#f5f5f5",
-        color: "#000",
-        border: "1px solid #f5f5f5",
-        borderRadius: 3,
-        padding: "4px 12px",
-        cursor: "pointer",
-        fontSize: "0.875rem",
-        fontWeight: 600,
-        textTransform: "none",
-        display: "flex",
-        alignItems: "center",
-        "&:hover": {
-          backgroundColor: "#bcc7ce",
-          border: "1px solid #bcc7ce",
-        },
-      },
-      drawDeleteButton: {
-        display: { xs: "none", sm: "flex" },
-      },
-    };
-
     return (
       <Box sx={responsiveStyles.container}>
         <Box sx={responsiveStyles.mapHeader}>
@@ -701,28 +668,28 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           </Typography>
           <Box sx={responsiveStyles.buttonContainer}>
             <Button
-              sx={responsiveStyles.button}
+              sx={responsiveStyles.button as SxProps<Theme>}
               onClick={handleLayersClick}
               startIcon={<span style={{ fontSize: "1rem" }}>⋮⋮</span>}
             >
               {i18n.language === "en" ? "Layers" : "الطبقات"}
             </Button>
             <Button
-              sx={responsiveStyles.button}
+              sx={responsiveStyles.button as SxProps<Theme>}
               onClick={handleToggleFullscreen}
               startIcon={<span style={{ fontSize: "1rem" }}>⟐</span>}
             >
               {i18n.language === "en" ? "Fullscreen" : "ملء الشاشة"}
             </Button>
             <Button
-              sx={[responsiveStyles.button, responsiveStyles.drawDeleteButton]}
+              sx={[responsiveStyles.button, responsiveStyles.drawDeleteButton] as SxProps<Theme>}
               onClick={() => sketchVM?.create("polygon")}
               startIcon={<span style={{ fontSize: "1rem" }}>✏️</span>}
             >
               {i18n.language === "en" ? "Draw Parcel" : "رسم مخطط"}
             </Button>
             <Button
-              sx={[responsiveStyles.button, responsiveStyles.drawDeleteButton]}
+              sx={[responsiveStyles.button, responsiveStyles.drawDeleteButton] as SxProps<Theme>}
               onClick={deleteSelectedGraphic}
               disabled={!selectedGraphic}
               startIcon={<span style={{ fontSize: "1rem" }}>🗑️</span>}
@@ -758,29 +725,12 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
         <Box sx={responsiveStyles.mapDiv} ref={mapDiv}>
           <Backdrop
             open={isLoading}
-            sx={{
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              zIndex: (theme) => theme.zIndex.drawer + 1,
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
+            sx={responsiveStyles.backdrop}
           >
             <CircularProgress color="inherit" size={40} thickness={4} />
             <Typography
               variant="h6"
-              sx={{
-                color: "#fff",
-                mt: 2,
-                fontSize: { xs: "1rem", sm: "1.2rem" },
-                textAlign: "center",
-              }}
+              sx={responsiveStyles.backdropTypography}
             >
               {error ||
                 (i18n.language === "en"
@@ -794,23 +744,19 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           onClose={cancelDelete}
           maxWidth="sm"
           fullWidth
+          sx={responsiveStyles.dialog}
         >
-          <DialogTitle sx={{ backgroundColor: "#f5f5f5", color: "#d32f2f" }}>
+          <DialogTitle sx={responsiveStyles.dialogTitle}>
             {t("confirmDelete") || "تأكيد الحذف"}
           </DialogTitle>
-          <DialogContent sx={{ p: 3, backgroundColor: "#f5f5f5" }}>
+          <DialogContent sx={responsiveStyles.dialogContent}>
             <DialogContentText
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                fontSize: "20px",
-              }}
+              sx={responsiveStyles.dialogContentText}
             >
               {t("areYouSure") || "هل أنت متأكد من حذف الرسمة؟"}
             </DialogContentText>
           </DialogContent>
-          <DialogActions sx={{ p: 2, backgroundColor: "#f5f5f5" }}>
+          <DialogActions sx={responsiveStyles.dialogActions}>
             <Button onClick={cancelDelete} variant="outlined" color="primary">
               {t("cancel") || "إلغاء"}
             </Button>
@@ -820,20 +766,37 @@ const ParcelMap = forwardRef<ParcelMapRef, ParcelMapProps>(
           </DialogActions>
         </Dialog>
         <Snackbar
-          open={openSnackbar}
-          autoHideDuration={3000}
-          onClose={() => setOpenSnackbar(false)}
-          anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        >
-          <Alert
-            onClose={() => setOpenSnackbar(false)}
-            severity="success"
-            variant="filled"
-            sx={{ width: "100%" }}
-          >
-            {t("operationSuccess") || "تم تنفيذ العملية بنجاح"}
-          </Alert>
-        </Snackbar>
+               open={openSnackbar}
+               autoHideDuration={3000}
+               onClose={() => setOpenSnackbar(false)}
+               anchorOrigin={{ vertical: "top", horizontal: "center" }}
+               sx={{
+                 width: { xs: "80%", sm: "auto" },
+                 maxWidth: { xs: "350px", sm: "600px" },
+                 margin: "auto",
+                 display: "flex",
+                 justifyContent: "center",
+                 alignItems: "center",
+                 "& .MuiSnackbarContent-root": {
+                   fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                   padding: { xs: "8px 16px", sm: "12px 24px" },
+                 },
+               }}
+             >
+               <Alert
+                 onClose={() => setOpenSnackbar(false)}
+                 severity="success"
+                 sx={{
+                   width: "90%",
+                   fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                   display: "flex",
+                   justifyContent: "center",
+                   textAlign: "center",
+                 }}
+               >
+                 {t("operationSuccess")}
+               </Alert>
+             </Snackbar>
       </Box>
     );
   }
