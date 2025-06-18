@@ -99,13 +99,13 @@ export const useResponsiveStyles = () => {
         overflowX: isMobile ? "auto" : "hidden",
       },
       "& .MuiDataGrid-row": {
-        maxWidth: "100%", // Prevent rows from extending beyond container
-        boxSizing: "border-box", // Include padding and borders in width
+        maxWidth: "100%",
+        boxSizing: "border-box",
       },
       "& .MuiDataGrid-cell": {
-        maxWidth: "100%", // Prevent cells from extending
-        overflow: "hidden", // Hide overflow content
-        textOverflow: "ellipsis", // Add ellipsis for overflow text
+        maxWidth: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       },
     },
 
@@ -165,28 +165,53 @@ export const useResponsiveStyles = () => {
       justifyContent: "center",
     }),
 
-    // Dialog styles
+    // Confirm Dialog styles (for Delete and Multi-Delete)
+    confirmDialogStyles: {
+      "& .MuiDialog-paper": {
+        width: isMobile ? "90%" : "100%",
+        maxWidth: isMobile ? "90%" : "sm",
+        height: isMobile ? "auto" : "auto",
+        maxHeight: isMobile ? "70vh" : "none",
+        margin: isMobile ? "16px" : "32px",
+        borderRadius: isMobile ? "8px" : "12px",
+        boxShadow: isMobile ? "0 4px 16px rgba(0,0,0,0.2)" : "none",
+      },
+    },
+
+    // Dialog title styles
     dialogTitleStyles: {
-      fontSize: isMobile ? "1rem" : "1.25rem",
+      fontSize: isMobile ? "0.9rem" : "1.25rem",
+      padding: isMobile ? "8px 16px" : "16px 24px",
     },
 
+    // Dialog content styles
     dialogContentStyles: {
-      p: isMobile ? 2 : 3,
+      padding: isMobile ? "16px" : "24px", // Smaller padding on mobile
+      backgroundColor: "#f5f5f5",
+      overflowY: isMobile ? "auto" : "visible",
     },
 
+    // Dialog content text styles
     dialogContentTextStyles: {
-      fontSize: isMobile ? "0.9rem" : "1rem",
+      fontSize: isMobile ? "0.8rem" : "1rem",
+      color: "#333",
     },
 
+    // Dialog actions styles
     dialogActionsStyles: {
-      p: isMobile ? 1 : 2,
+      padding: isMobile ? "4px" : "16px",
+      justifyContent: "space-between",
+      backgroundColor: "#f5f5f5",
     },
 
+    // Dialog button styles
     dialogButtonStyles: {
-      fontSize: isMobile ? "0.7rem" : isTablet ? "0.8rem" : "0.875rem",
-      padding: isMobile ? "4px 8px" : "6px 12px",
+      fontSize: isMobile ? "0.65rem" : isTablet ? "0.8rem" : "0.875rem",
+      padding: isMobile ? "4px 10px" : "6px 12px",
+      minWidth: isMobile ? "80px" : "100px",
     },
 
+    // View Dialog styles
     viewDialogStyles: {
       "& .MuiDialog-paper": {
         borderRadius: isMobile ? 0 : "12px",
@@ -204,7 +229,7 @@ export const useResponsiveStyles = () => {
       flexDirection: "column",
       gap: isMobile ? 1 : 2,
       backgroundColor: "#f9f9f9",
-      padding: isMobile ? "10px" : "20px",
+      padding: isMobile ? "20px" : "20px",
       borderRadius: "8px",
       boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
     },
@@ -241,8 +266,10 @@ export const useResponsiveStyles = () => {
 
     // Snackbar Alert styles
     snackbarAlertStyles: {
-      width: "100%",
+      width: isMobile ? "80%" : "100%", // Smaller width on mobile
+      maxWidth: isMobile ? "300px" : "none", // Cap width for better look
       fontSize: isMobile ? "0.7rem" : "0.85rem",
+      margin: "0 auto", // Center the alert
     },
 
     // Column flex and width
