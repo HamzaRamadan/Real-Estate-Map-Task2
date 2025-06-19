@@ -13,6 +13,9 @@ Live demo for this WebSite :->    https://real-estate-map-task-2.vercel.app/
 How to work locally
 
 1-  git clone https://github.com/HamzaRamadan/Real-Estate-Map-Task2.git
+
 2- cd Real-Estate-Map-Task2
+
 3- npm install
+
 4- npm run dev 
