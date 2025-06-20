@@ -79,8 +79,10 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [rowSelectionModel, setRowSelectionModel] = useState<number[]>([]);
 
-  // Media query for screen width between 900px and 1100px (Responsive)
+  // Media queries
   const isMidRange = useMediaQuery("(min-width:900px) and (max-width:1100px)");
+  const isTablet = useMediaQuery("(min-width:600px) and (max-width:900px)");
+  const isMobile = useMediaQuery("(max-width:600px)");
 
   // Get styles with isMidRange as parameter
   const responsiveStyles = getResponsiveStyles({ isMidRange });
@@ -463,8 +465,23 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
       },
     ];
 
-    setColumns(baseColumns);
-  }, [t]);
+    // تعديل الأعمدة حسب حجم الشاشة
+    let adjustedColumns = [...baseColumns];
+    if (isMobile) {
+      adjustedColumns.forEach((col) => {
+        col.flex = undefined;
+        col.width = 100; // عرض ثابت للفون
+      });
+    } else if (isTablet) {
+      adjustedColumns.forEach((col) => {
+        col.flex = 1;
+        col.width = 200; // زيادة العرض شوية للتابلت عشان ميعملش scroll
+        col.cellClassName = "no-padding"; // تقليل المسافات بين الخلايا
+      });
+    }
+
+    setColumns(adjustedColumns);
+  }, [t, isMobile, isTablet]);
 
   return (
     <Box sx={responsiveStyles.container}>
@@ -510,7 +527,12 @@ const PopulationDataGrid: React.FC<PopulationDataGridProps> = ({
         rowSelectionModel={rowSelectionModel}
         hideFooter
         autoHeight
-        sx={responsiveStyles.dataGrid}
+        sx={{
+          ...responsiveStyles.dataGrid,
+          '& .no-padding': {
+            padding: '4px 2px', // تقليل المسافات بين الخلايا في التابلت
+          },
+        }}
         localeText={{
           noRowsLabel: t("noResultsFound") || "No results found",
         }}
